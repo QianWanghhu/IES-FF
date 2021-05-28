@@ -9,11 +9,11 @@ import time
 import os
 import spotpy as sp
 
-from modeling_funcs import change_param_values, modeling_settings
 from funcs.read_data import file_settings
 
-def run_source(vars, vs, change_param_values=change_param_values, 
-    modeling_settings=modeling_settings):
+def run_source(vars, vs):
+
+    from modeling_funcs import change_param_values, modeling_settings
 
     print('Read Parameters')
     parameters = pd.read_csv('parameters.csv')
