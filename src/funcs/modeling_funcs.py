@@ -43,7 +43,7 @@ def modeling_settings():
     NODEs = ['gauge_126001A_SandyCkHomebush']
     things_to_record = [{'NetworkElement':node,'RecordingVariable':'Constituents@N_DIN@Downstream Flow Mass'} for node in NODEs]
     criteria = {'NetworkElement': NODEs[0],'RecordingVariable':'Constituents@N_DIN@Downstream Flow Mass'}
-    start_date = '01/07/2007'; end_date='30/06/2018'
+    start_date = '01/07/2016'; end_date='30/06/2018'
     assert isinstance(start_date, str),"start_date has to be time str."
     assert isinstance(end_date, str),"end_date has to be time str."
     assert isinstance(things_to_record, list),"things_to_record has to be a list of dict."
@@ -189,7 +189,7 @@ def change_param_values(v, pvalue_dict, fromList=False, subcatment=None):
         v.model.catchment.generation.set_param_values('DeliveryRatioSurface',pvalue_dict['DRF'],  fus=['Sugarcane'], fromList=fromList)
         v.model.catchment.generation.set_param_values('DeliveryRatioSeepage',pvalue_dict['DRP'],  fus=['Sugarcane'], fromList=fromList)
         v.model.catchment.generation.set_param_values('DWC', pvalue_dict['DWC'], fus=['Sugarcane'], fromList=fromList)
-        v.model.catchment.generation.set_param_values('Load_Conversion_Factor', pvalue_dict['LCF'], fus=['Sugarcane'], fromList=fromList)
+        # v.model.catchment.generation.set_param_values('Load_Conversion_Factor', pvalue_dict['LCF'], fus=['Sugarcane'], fromList=fromList)
         v.model.catchment.generation.set_param_values('dissConst_DWC', pvalue_dict['gfDWC'], fus=['Grazing Forested'], fromList=fromList)
         v.model.catchment.generation.set_param_values('dissConst_EMC', pvalue_dict['gfEMC'], fus=['Grazing Forested'], fromList=fromList)
         v.model.catchment.generation.set_param_values('dissConst_DWC', pvalue_dict['goDWC'], fus=['Grazing Open'], fromList=fromList)
@@ -205,7 +205,7 @@ def change_param_values(v, pvalue_dict, fromList=False, subcatment=None):
             v.model.catchment.generation.set_param_values('DeliveryRatioSurface',pvalue_dict[f'DRF{subcat}'],  fus=['Sugarcane'], catchments=f'SC #{subcat}', fromList=fromList)
             v.model.catchment.generation.set_param_values('DeliveryRatioSeepage',pvalue_dict[f'DRP{subcat}'],  fus=['Sugarcane'], catchments=f'SC #{subcat}', fromList=fromList)
             v.model.catchment.generation.set_param_values('DWC', pvalue_dict[f'DWC{subcat}'], fus=['Sugarcane'], catchments=f'SC #{subcat}', fromList=fromList)
-            v.model.catchment.generation.set_param_values('Load_Conversion_Factor', pvalue_dict[f'LCF{subcat}'], fus=['Sugarcane'], catchments=f'SC #{subcat}', fromList=fromList)
+            # v.model.catchment.generation.set_param_values('Load_Conversion_Factor', pvalue_dict[f'LCF{subcat}'], fus=['Sugarcane'], catchments=f'SC #{subcat}', fromList=fromList)
             v.model.catchment.generation.set_param_values('dissConst_DWC', pvalue_dict[f'gfDWC{subcat}'], fus=['Grazing Forested'], catchments=f'SC #{subcat}', fromList=fromList)
             v.model.catchment.generation.set_param_values('dissConst_EMC', pvalue_dict[f'gfEMC{subcat}'], fus=['Grazing Forested'], catchments=f'SC #{subcat}', fromList=fromList)
             v.model.catchment.generation.set_param_values('dissConst_DWC', pvalue_dict[f'goDWC{subcat}'], fus=['Grazing Open'], catchments=f'SC #{subcat}', fromList=fromList)
