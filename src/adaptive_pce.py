@@ -1,89 +1,125 @@
-"""
-The script is used to build adaptive pce for signatures and RMSE
-"""
 
+import os
 import numpy as np
 import pandas as pd
 from veneer.pest_runtime import *
+
 import pyapprox as pya
 from functools import partial 
 from pyapprox.adaptive_sparse_grid import max_level_admissibility_function
 from pyapprox.adaptive_polynomial_chaos import variance_pce_refinement_indicator
 from pyapprox.univariate_quadrature import clenshaw_curtis_rule_growth
+from pyapprox.variable_transformations import AffineRandomVariableTransformation
 
 from funcs.read_data import variables_prep, file_settings
-from funcs.boots_pya import fun
+from funcs.modeling_funcs import vs_settings, \
+        modeling_settings, paralell_vs, obtain_initials, change_param_values
 
-
-def call_source():
-    pass
-    # initialize the vs
-
-    # change parameter values
-
-    # run the model, save and return results
-
-
-def adaptive_pce(variable):
-    pass
-    num_vars = variable.num_vars()
-    # Create PyApprox model
-    pce = pya.AdaptiveInducedPCE(num_vars, cond_tol=1e2)
-    # Define criteria
-    max_level = 4
-    err_tol = 0.0
-    max_num_samples = 1000
-
-    max_level_1d = [max_level]*(pce.num_vars)
-    admissibility_function = partial(
-        max_level_admissibility_function, max_level, max_level_1d,
-        max_num_samples, err_tol)
-    refinement_indicator = variance_pce_refinement_indicator
-
-    pce.set_function(call_source, variable)
-    pce.set_refinement_functions(
-        refinement_indicator, 
-        admissibility_function,
-        clenshaw_curtis_rule_growth
-    )
-
-    # Generate emulator
-    pce.build()
-
-    # fit the PCE
-
-# define the variables for PCE
-param_file = file_settings()[-1]
-variable = variables_prep(param_file, product_uniform='uniform', dummy=False)
-
-"""
-RUN SOURCE to generate observation_ensemble.csv
-"""
-from veneer.pest_runtime import *
-from veneer.manage import start,kill_all_now
-import os
-
-import source_runner as sr 
-from source_runner import parameter_funcs
-
-from modeling_funcs import vs_settings, \
-    change_param_values, generate_observation_ensemble, \
-        modeling_settings, paralell_vs
-
+# Create the copy of models and veneer list
 project_name = 'MW_BASE_RC10.rsproj'
 veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
 first_port=15000; num_copies = 1
 NODEs, things_to_record, criteria, start_date, end_date = modeling_settings()
 processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
 vs_list = vs_settings(ports, things_to_record)
-
-# generate parameter emsenble
-datapath = file_settings()[1]
-para_info = parameter_funcs.load_parameter_file(datapath + 'parameters.csv')
-
+vs = vs_list[0]
 # obtain the initial values of parameters 
-param_names, param_vename_dic, param_vename, param_types = sr.group_parameters(para_info)
-initial_values = parameter_funcs.get_initial_param_vals(vs_list[0], param_names, param_vename, param_vename_dic)
-# initial_values = obtain_initials(vs_list[0])
+initial_values = obtain_initials(vs_list[0])
+
+def run_source(vars, vs=vs):
+    """
+    Script used to run_source and return the output file.
+    """
+    from funcs.modeling_funcs import change_param_values, modeling_settings
+    print('Read Parameters')
+    parameters = pd.read_csv('../data/Parameters-PCE.csv', index_col='Index')
+
+    # import observation if the output.txt requires the use of obs.
+    date_range = pd.to_datetime(['2017/07/01', '2018/06/30'])
+    observed_din = pd.read_csv(f'{file_settings()[1]}126001A.csv', index_col='Date')
+    observed_din.index = pd.to_datetime(observed_din.index)
+    observed_din = observed_din.loc[date_range[0]:date_range[1], :].filter(items=[observed_din.columns[0]]).apply(lambda x: 1000 * x)
+    
+    # loop over the vars and try to use parallel 
+    parameter_dict = {}
+    for i,j in parameters.iterrows():
+        parameter_dict[j.Name_short] = vars[i][0]
+        
+    # define the modeling period and the recording variables
+    NODEs, things_to_record, criteria, start_date, end_date = modeling_settings()
+    vs.configure_recording(disable=[{}], enable=things_to_record)
+    vs = change_param_values(vs, parameter_dict) 
+    vs.drop_all_runs()
+    vs.run_model(params={'NoHardCopyResults':True}, start = start_date, end = end_date) 
+
+    # define the criteria for retrieve multiple_time_series
+    column_names = ['din']
+    get_din = vs.retrieve_multiple_time_series(criteria=criteria)
+    get_din.columns = column_names
+    din = get_din.loc[date_range[0]:date_range[1], :]
+
+    if vars.shape[1] > 1:
+        breakpoint()
+
+    if din.mean()[0] == 0:
+        cv = np.array([0])
+    else:
+        cv = np.array([din.std() / din.mean()])
+    # breakpoint()
+    print('Finish one run')
+    print(cv.shape)
+    cv = cv.reshape(cv.shape[0], 1)
+    return cv
+ # END run_source()
+
+
+# def run_source(x):
+    
+#     y = np.array(x[0:10].sum() + x[10]**2 + x[11] * 4 + 0.1)
+#     # breakpoint()
+#     print(y.shape)
+#     return y.reshape(y.shape[0], 1)
+    
+# read parameter distributions
+datapath = file_settings()[1]
+para_info = pd.read_csv(datapath + 'Parameters-PCE.csv')
+
 # set the time period of the results
-retrieve_time = [pd.Timestamp('2000-07-01'), pd.Timestamp('2018-06-30')]
+retrieve_time = [pd.Timestamp('2017-07-01'), pd.Timestamp('2018-06-30')]
+
+# define the variables for PCE
+param_file = file_settings()[-1]
+ind_vars, variable = variables_prep(param_file, product_uniform='uniform', dummy=False)
+var_trans = AffineRandomVariableTransformation(variable, enforce_bounds=True)
+
+# Create PyApprox model
+n_candidate_samples = 10000
+candidate_samples = -np.cos(np.pi*pya.sobol_sequence(var_trans.num_vars(),
+                        n_candidate_samples))
+pce = pya.AdaptiveLejaPCE(var_trans.num_vars(), candidate_samples=candidate_samples)
+
+# Define criteria
+max_level = 2
+err_tol = 1e-4
+max_num_samples = 100
+max_level_1d = [max_level]*(pce.num_vars)
+
+admissibility_function = partial(
+    max_level_admissibility_function, max_level, max_level_1d,
+    max_num_samples, err_tol)
+
+refinement_indicator = variance_pce_refinement_indicator
+pce.set_function(run_source, var_trans)
+
+pce.set_refinement_functions(
+    refinement_indicator, 
+    admissibility_function,
+    clenshaw_curtis_rule_growth
+)
+
+# Generate emulator
+pce.build()
+
+# set the parameter values to initial values
+for vs in vs_list:
+    vs = change_param_values(vs, initial_values, fromList=True)
