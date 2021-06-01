@@ -1,10 +1,8 @@
 import numpy as np
 from numpy.random import uniform
-import pandas as pd
-from pyapprox import variables
 from veneer.pest_runtime import *
 import pyapprox as pya
-from scipy.stats import beta,uniform
+from scipy.stats import uniform
 from functools import partial 
 from pyapprox.adaptive_sparse_grid import max_level_admissibility_function
 from pyapprox.adaptive_polynomial_chaos import variance_pce_refinement_indicator
@@ -17,12 +15,6 @@ alph = 5
 bet = 5.
 err_tol = 1e-7
 a = np.random.uniform(0, 100, (num_vars, 1))
-# variable =  IndependentMultivariateRandomVariable(
-#                 [beta(alph, bet, 0, 1)], [np.arange(num_vars)])
-# var_trans = AffineRandomVariableTransformation(
-#             IndependentMultivariateRandomVariable(
-#                 [beta(alph, bet, 0, 1)], [np.arange(num_vars)]))
-
 
 variable =  IndependentMultivariateRandomVariable(
                 [uniform(0, 1)], [np.arange(num_vars)])
