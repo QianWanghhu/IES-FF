@@ -36,6 +36,16 @@ def function(x):
     breakpoint()
     return vals
 
+# def run_source(x):
+#     """
+#     A test function for adaptive PCE.
+#     """
+#     y = np.array(x[0:10].sum() + x[10]**2 + x[11] * 4 + 0.1)
+#     # breakpoint()
+#     print(y.shape)
+#     return y.reshape(y.shape[0], 1)
+
+
 # num_vars = variable.num_vars()
 # Create PyApprox model
 pce = pya.AdaptiveInducedPCE(num_vars, cond_tol=1e2)
