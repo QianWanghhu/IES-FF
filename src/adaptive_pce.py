@@ -1,5 +1,4 @@
 
-import os
 import numpy as np
 import pandas as pd
 from veneer.pest_runtime import *
@@ -18,19 +17,20 @@ from funcs.modeling_funcs import vs_settings, \
 # Create the copy of models and veneer list
 project_name = 'MW_BASE_RC10.rsproj'
 veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-first_port=15000; num_copies = 1
-NODEs, things_to_record, criteria, start_date, end_date = modeling_settings()
+first_port=15000; num_copies = 2
+_, things_to_record, _, _, _ = modeling_settings()
 processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
+
 vs_list = vs_settings(ports, things_to_record)
-vs = vs_list[0]
 # obtain the initial values of parameters 
 initial_values = obtain_initials(vs_list[0])
 
-def run_source(vars, vs=vs):
+def run_source(vars, vs_list=vs_list):
     """
     Script used to run_source and return the output file.
+    The function is called by AdaptiveLejaPCE.
     """
-    from funcs.modeling_funcs import change_param_values, modeling_settings
+    from funcs.modeling_funcs import modeling_settings, generate_observation_ensemble
     print('Read Parameters')
     parameters = pd.read_csv('../data/Parameters-PCE.csv', index_col='Index')
 
@@ -40,52 +40,35 @@ def run_source(vars, vs=vs):
     observed_din.index = pd.to_datetime(observed_din.index)
     observed_din = observed_din.loc[date_range[0]:date_range[1], :].filter(items=[observed_din.columns[0]]).apply(lambda x: 1000 * x)
     
-    # loop over the vars and try to use parallel 
-    parameter_dict = {}
-    for i,j in parameters.iterrows():
-        parameter_dict[j.Name_short] = vars[i][0]
-        
+    # loop over the vars and try to use parallel     
+    parameter_df = pd.DataFrame(index=np.arange(vars.shape[1]), columns=parameters.Name_short)
+    for i in range(vars.shape[1]):
+        parameter_df.iloc[i] = vars[:, i]
+
+    # set the time period of the results
+    retrieve_time = [pd.Timestamp('2017-07-01'), pd.Timestamp('2018-06-30')]
+
     # define the modeling period and the recording variables
     NODEs, things_to_record, criteria, start_date, end_date = modeling_settings()
-    vs.configure_recording(disable=[{}], enable=things_to_record)
-    vs = change_param_values(vs, parameter_dict) 
-    vs.drop_all_runs()
-    vs.run_model(params={'NoHardCopyResults':True}, start = start_date, end = end_date) 
-
-    # define the criteria for retrieve multiple_time_series
-    column_names = ['din']
-    get_din = vs.retrieve_multiple_time_series(criteria=criteria)
-    get_din.columns = column_names
-    din = get_din.loc[date_range[0]:date_range[1], :]
+    din = generate_observation_ensemble(vs_list, 
+        criteria, start_date, end_date, parameter_df, retrieve_time)
+    breakpoint()
+    if din.mean(axis=0)[0] == 0:
+        cv = np.array([0])
+    else:
+        breakpoint()
+        cv = np.array([din.std(axis = 0) / din.mean(axis = 0)].values)
 
     if vars.shape[1] > 1:
         breakpoint()
-
-    if din.mean()[0] == 0:
-        cv = np.array([0])
-    else:
-        cv = np.array([din.std() / din.mean()])
-    # breakpoint()
-    print('Finish one run')
-    print(cv.shape)
     cv = cv.reshape(cv.shape[0], 1)
+    print(f'Finish {cv.shape[0]} run')
     return cv
- # END run_source()
+# END run_source()
 
-
-# def run_source(x):
-    
-#     y = np.array(x[0:10].sum() + x[10]**2 + x[11] * 4 + 0.1)
-#     # breakpoint()
-#     print(y.shape)
-#     return y.reshape(y.shape[0], 1)
-    
 # read parameter distributions
 datapath = file_settings()[1]
 para_info = pd.read_csv(datapath + 'Parameters-PCE.csv')
-
-# set the time period of the results
-retrieve_time = [pd.Timestamp('2017-07-01'), pd.Timestamp('2018-06-30')]
 
 # define the variables for PCE
 param_file = file_settings()[-1]
@@ -119,6 +102,10 @@ pce.set_refinement_functions(
 
 # Generate emulator
 pce.build()
+
+# store PCE
+import pickle
+pickle.dump(pce, open(f'{file_settings[0]}\pce-cv.pkl', "wb"))
 
 # set the parameter values to initial values
 for vs in vs_list:
