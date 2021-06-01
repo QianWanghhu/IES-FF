@@ -54,15 +54,16 @@ def run_source(vars, vs_list=vs_list):
         criteria, start_date, end_date, parameter_df, retrieve_time)
     breakpoint()
     if din.mean(axis=0)[0] == 0:
-        cv = np.array([0])
+        cv = np.array([1e-5]) # Set the cv at 1e-5 to satisfy the requirements of the adaptive_polynomial_chaos
     else:
         breakpoint()
-        cv = np.array([din.std(axis = 0) / din.mean(axis = 0)].values)
+        cv = np.array(din.std(axis = 0).values / din.mean(axis = 0).values)
 
-    if vars.shape[1] > 1:
+    if cv.shape[0] > 1:
         breakpoint()
     cv = cv.reshape(cv.shape[0], 1)
     print(f'Finish {cv.shape[0]} run')
+
     return cv
 # END run_source()
 
@@ -105,7 +106,9 @@ pce.build()
 
 # store PCE
 import pickle
-pickle.dump(pce, open(f'{file_settings[0]}\pce-cv.pkl', "wb"))
+pickle.dump(pce, open(f'{file_settings()[0]}\pce-cv.pkl', "wb"))
+
+# pce_load = pickle.load(open(f'{file_settings()[0]}\pce-cv.pkl', "rb"))
 
 # set the parameter values to initial values
 for vs in vs_list:
