@@ -16,7 +16,7 @@ def run_source(vars, vs):
     from modeling_funcs import change_param_values, modeling_settings
 
     print('Read Parameters')
-    parameters = pd.read_csv('parameters.csv')
+    parameters = pd.read_csv('Parameter_PCE.csv', index_col='Index')
 
     # Define objective functions
     # Use annual or monthly loads
@@ -47,8 +47,8 @@ def run_source(vars, vs):
 
     parameter_dict = {}
     for i,j in parameters.iterrows():
-        scaled_value = (j.upper - j.lower) * j.value/100 + j.lower 
-        parameter_dict[j.parameter] = scaled_value
+        # scaled_value = (j.upper - j.lower) * j.value/100 + j.lower 
+        parameter_dict[j.Name_short] = vars[i]
         
     # define the modeling period and the recording variables
     NODEs, things_to_record, criteria, start_date, end_date = modeling_settings()
