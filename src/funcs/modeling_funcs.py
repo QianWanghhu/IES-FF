@@ -169,7 +169,7 @@ def generate_parameter_ensemble(nsample, param_ensemble, datapath, seed=None):
     """
     fname = param_ensemble
     if not os.path.exists(fname):      
-        parameters = pd.read_csv(datapath + 'Parameters.csv', index_col = 'Index')
+        parameters = pd.read_csv(datapath + 'Parameters-PCE.csv', index_col = 'Index')
 
         problem = {
             'num_vars': parameters.shape[0],
