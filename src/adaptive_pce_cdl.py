@@ -63,4 +63,4 @@ y_hat = emulator.model(x)
 #              metric_name="RMSE",
 #              squared=False)
 
-# print(emulator.sensitivities())
+print(emulator.sensitivities())
