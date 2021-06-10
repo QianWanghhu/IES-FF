@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pyapprox as pya
 import pickle
-from read_data import file_settings
+from .read_data import file_settings
 
 def return_sa(year, parameters):
     """
