@@ -18,7 +18,7 @@ from funcs.modeling_funcs import vs_settings, \
 # Create the copy of models and veneer list
 project_name = 'MW_BASE_RC10.rsproj'
 veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-first_port=15000; num_copies = 2
+first_port=15000; num_copies = 8
 _, things_to_record, _, _, _ = modeling_settings()
 processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
 
@@ -26,7 +26,7 @@ vs_list = vs_settings(ports, things_to_record)
 # obtain the initial values of parameters 
 initial_values = obtain_initials(vs_list[0])
 
-def run_source_annual(vars, vs_list=vs_list):
+def run_source_lsq(vars, vs_list=vs_list):
     """
     Script used to run_source and return the output file.
     The function is called by AdaptiveLejaPCE.
@@ -56,13 +56,19 @@ def run_source_annual(vars, vs_list=vs_list):
         return sum_126001A
     # End timeseries_sum()
 
+    # import observation if the output.txt requires the use of obs.
+    date_range = pd.to_datetime(['2009/07/01', '2018/06/30'])
+    observed_din = pd.read_csv(f'{file_settings()[1]}126001A.csv', index_col='Date')
+    observed_din.index = pd.to_datetime(observed_din.index)
+    observed_din = observed_din.loc[date_range[0]:date_range[1], :].filter(items=[observed_din.columns[0]]).apply(lambda x: 1000 * x)
+    
     # loop over the vars and try to use parallel     
     parameter_df = pd.DataFrame(index=np.arange(vars.shape[1]), columns=parameters.Name_short)
     for i in range(vars.shape[1]):
         parameter_df.iloc[i] = vars[:, i]
 
     # set the time period of the results
-    retrieve_time = [pd.Timestamp('2017-07-01'), pd.Timestamp('2018-06-30')]
+    retrieve_time = [pd.Timestamp('2009-07-01'), pd.Timestamp('2018-06-30')]
 
     # define the modeling period and the recording variables
     _, _, criteria, start_date, end_date = modeling_settings()
@@ -72,15 +78,20 @@ def run_source_annual(vars, vs_list=vs_list):
     # obtain the sum at a given temporal scale
     # din_pbias = sp.objectivefunctions.pbias(observed_din[observed_din.columns[0]], din[column_names[0]])
     din_126001A = timeseries_sum(din, temp_scale = 'annual')
-    din_126001A = pd.DataFrame(din_126001A,dtype='float')
-    din_126001A.replace(0, 1e-5, inplace=True)
+    obs_din = timeseries_sum(observed_din, temp_scale = 'annual')
+    din_126001A = pd.DataFrame(din_126001A,dtype='float').values
+    obs_din = pd.DataFrame(obs_din,dtype='float').values
 
-    print(f'Finish {din_126001A.shape[0]} run')
-    annual_loads = din_126001A.values.T
-    breakpoint()
+    # breakpoint()
+    resid = din_126001A - obs_din
+    rmse = (np.mean(resid ** 2, axis=0)) ** 0.5
+    if rmse[0] == 0: rmse[0] = 1e-8
+    rmse = rmse.reshape(rmse.shape[0], 1)
 
-    return annual_loads
-# END run_source_annual()
+    print(f'Finish {rmse.shape[0]} run')
+
+    return rmse
+# END run_source_lsq()
 
 # read parameter distributions
 datapath = file_settings()[1]
@@ -98,8 +109,8 @@ candidate_samples = -np.cos(np.pi*pya.sobol_sequence(var_trans.num_vars(),
 pce = pya.AdaptiveLejaPCE(var_trans.num_vars(), candidate_samples=candidate_samples)
 
 # Define criteria
-max_level = 2
-err_tol = 1e-4
+max_level = 6
+err_tol = 1e-8
 max_num_samples = 100
 max_level_1d = [max_level]*(pce.num_vars)
 
@@ -108,7 +119,7 @@ admissibility_function = partial(
     max_num_samples, err_tol)
 
 refinement_indicator = variance_pce_refinement_indicator
-pce.set_function(run_source_annual, var_trans)
+pce.set_function(run_source_lsq, var_trans)
 
 pce.set_refinement_functions(
     refinement_indicator, 
@@ -121,7 +132,7 @@ pce.build()
 
 # store PCE
 import pickle
-pickle.dump(pce, open(f'{file_settings()[0]}\pce-cv.pkl', "wb"))
+pickle.dump(pce, open(f'{file_settings()[0]}\pce-rmse.pkl', "wb"))
 
 # set the parameter values to initial values
 for vs in vs_list:
