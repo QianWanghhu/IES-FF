@@ -22,7 +22,7 @@ def return_sa(year, parameters):
     """
 
     # import pces
-    pce_load = pickle.load(open(f'{file_settings()[0]}pce-{year}-level4.pkl', "rb"))
+    pce_load = pickle.load(open(f'{file_settings()[0]}pce-{year}.pkl', "rb"))
     sobol_analysis = pya.sensitivity_analysis.analyze_sensitivity_polynomial_chaos
     res = sobol_analysis(pce_load.pce, 2)
     total_effects = res.total_effects
@@ -34,7 +34,7 @@ def return_sa(year, parameters):
     return sa
 
 
-def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, orig_x_opt=None, orig_y_opt=None):
+def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, y_lab='SSE', orig_x_opt=None, orig_y_opt=None):
     """
     Create dotty plots for the model inputs and outputs.
     Parameteres:
@@ -61,7 +61,7 @@ def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, orig_x_opt=None, or
         ax = sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='r', s=20)
                    
         ax.set_title(param_names[ii])
-        if ii % 4 == 0: ax.set_ylabel('SSE')
+        if ii % 4 == 0: ax.set_ylabel(y_lab)
             
     return fig
 
