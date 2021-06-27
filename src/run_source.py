@@ -169,3 +169,43 @@ def run_source_annual(vars, vs_list=vs_list):
     return din_126001A
 # END run_source_annual()
 
+def run_source_fix_samples(vs_list, vars):
+
+    from funcs.modeling_funcs import modeling_settings, generate_observation_ensemble
+    from funcs.utils import timeseries_sum
+        
+    print('Read Parameters')
+    parameters = pd.read_csv('../data/Parameters-PCE.csv', index_col='Index')
+
+    # import observation if the output.txt requires the use of obs.
+    date_range = pd.to_datetime(['2009/07/01', '2018/06/30'])
+    observed_din = pd.read_csv(f'{file_settings()[1]}126001A.csv', index_col='Date')
+    observed_din.index = pd.to_datetime(observed_din.index)
+    observed_din = observed_din.loc[date_range[0]:date_range[1], :].filter(items=[observed_din.columns[0]]).apply(lambda x: 1000 * x)
+
+    # loop over the vars and try to use parallel     
+    parameter_df = pd.DataFrame(index=np.arange(vars.shape[1]), columns=parameters.Name_short)
+    for i in range(vars.shape[1]):
+        parameter_df.iloc[i] = vars[:, i]
+    # set the time period of the results
+    retrieve_time = [pd.Timestamp('2009-07-01'), pd.Timestamp('2018-06-30')]
+    # define the modeling period and the recording variables
+    _, _, criteria, start_date, end_date = modeling_settings()
+    din = generate_observation_ensemble(vs_list, 
+        criteria, start_date, end_date, parameter_df, retrieve_time)
+
+    # obtain the sum at a given temporal scale
+    # din_pbias = sp.objectivefunctions.pbias(observed_din[observed_din.columns[0]], din[column_names[0]])
+    din_126001A = timeseries_sum(din, temp_scale = 'annual')
+    obs_din = timeseries_sum(observed_din, temp_scale = 'annual')
+    din_126001A = pd.DataFrame(din_126001A,dtype='float').values
+    obs_din = pd.DataFrame(obs_din,dtype='float').values
+
+    # breakpoint()
+    resid = din_126001A - obs_din
+    rmse = (np.mean(resid ** 2, axis=0)) ** 0.5
+    if rmse[0] == 0: rmse[0] = 1e-8
+    rmse = rmse.reshape(rmse.shape[0], 1)
+    print(f'Finish {rmse.shape[0]} run')
+    
+    return rmse
