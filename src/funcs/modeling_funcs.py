@@ -43,7 +43,7 @@ def modeling_settings():
     NODEs = ['gauge_126001A_SandyCkHomebush']
     things_to_record = [{'NetworkElement':node,'RecordingVariable':'Constituents@N_DIN@Downstream Flow Mass'} for node in NODEs]
     criteria = {'NetworkElement': NODEs[0],'RecordingVariable':'Constituents@N_DIN@Downstream Flow Mass'}
-    start_date = '01/07/2016'; end_date='30/06/2018'
+    start_date = '01/07/2007'; end_date='30/06/2018'
     assert isinstance(start_date, str),"start_date has to be time str."
     assert isinstance(end_date, str),"end_date has to be time str."
     assert isinstance(things_to_record, list),"things_to_record has to be a list of dict."
