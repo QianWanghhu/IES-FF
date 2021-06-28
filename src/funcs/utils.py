@@ -9,7 +9,7 @@ import seaborn as sns
 
 from .read_data import file_settings
 
-def return_sa(year, parameters):
+def return_sa(parameters, pce):
     """
     The function is used to calculate the sensitivity indices by PCE.
     Parameters：
@@ -22,9 +22,8 @@ def return_sa(year, parameters):
     """
 
     # import pces
-    pce_load = pickle.load(open(f'{file_settings()[0]}pce-{year}.pkl', "rb"))
     sobol_analysis = pya.sensitivity_analysis.analyze_sensitivity_polynomial_chaos
-    res = sobol_analysis(pce_load.pce, 2)
+    res = sobol_analysis(pce, 2)
     total_effects = res.total_effects
     main_effects = res.main_effects
     # export the sensitivity of parameters in terms of SSE    
@@ -52,7 +51,7 @@ def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, y_lab='SSE', orig_x
     ========
     fig
     """
-    fig, axes = plt.subplots(4, 4, figsize = (18, 18))
+    fig, axes = plt.subplots(4, 4, figsize = (18, 18), sharey=True)
     for ii in range(x_samples.shape[0]): 
         if orig_x_opt is not None:
             ax = sns.scatterplot(x=orig_x_opt[ii, :], y=orig_y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='g', s=20, alpha=0.3)
