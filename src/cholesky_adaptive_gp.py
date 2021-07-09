@@ -187,7 +187,8 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
     # Qian: understand the purpose of function increment_temper_param()
     def increment_temper_param(self, num_training_samples):
 
-        samples = np.random.uniform(0, 1, (self.nvars, 1000))
+        # samples = np.random.uniform(0, 1, (self.nvars, 1000))
+        samples = generate_independent_random_samples(self.variables, 1000)
         density_vals_prev = self.weight_function(samples)
 
         def objective(beta):
@@ -206,6 +207,7 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
         x0 = self.temper_param+1e-4
         # result = root(lambda b: objective(b)-1, x0)
         # x_opt = result.x
+        breakpoint()
         x_opt = bisect(lambda b: objective(b)-1, x0, 1)
         self.temper_param = x_opt
 
@@ -263,7 +265,6 @@ def get_posterior_samples(num_vars, weight_function, nsamples):
 
     return rosenbrock_samples
 
-
 def get_prior_samples(num_vars, variables, nsamples):
     rosenbrock_samples = generate_independent_random_samples(variables, nsamples)
 
@@ -292,8 +293,8 @@ def bayesian_inference_example():
     # Must set variables if not using uniform prior on [0,1]^D
     # variables = None
 
-    from scipy.stats import uniform, beta
-    uni_variable = [uniform(0, 1), uniform(0, 1)]
+    from scipy.stats import uniform, beta, norm
+    uni_variable = [uniform(0, 2), uniform(0, 3)]
     variables = IndependentMultivariateRandomVariable(uni_variable)
 
     # Get validation samples from prior
