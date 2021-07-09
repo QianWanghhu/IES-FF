@@ -195,8 +195,8 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
     def increment_temper_param(self, num_training_samples):
 
         # Sample over the user-defined variable distributions.
-        # samples = generate_independent_random_samples(self.variables, 1000)
-        samples = np.random.uniform(1, 2, (self.nvars, 1000))
+        samples = (generate_independent_random_samples)(self.variables, 1000)
+        # samples = np.random.uniform(0, 2, (self.nvars, 1000))
         density_vals_prev = self.weight_function(samples)
         def objective(beta):
             new_weight_function = partial(
@@ -285,7 +285,6 @@ def bayesian_inference_example():
     misfit_function = rosenbrock_function
 
     def weight_function(samples):
-        breakpoint()
         prior_vals = prior_pdf(samples).squeeze()
         misfit_vals = misfit_function(samples).squeeze()
         vals = np.exp(-misfit_vals)*prior_vals
