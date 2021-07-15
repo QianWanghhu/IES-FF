@@ -20,8 +20,7 @@ from sklearn.gaussian_process.kernels import RBF, \
 from pyapprox.density import tensor_product_pdf
 from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess
 from pyapprox.low_discrepancy_sequences import transformed_halton_sequence
-from pyapprox.utilities import \
-    compute_f_divergence, pivoted_cholesky_decomposition, \
+from pyapprox.utilities import compute_f_divergence, \
     get_tensor_product_quadrature_rule
 from pyapprox.probability_measure_sampling import generate_independent_random_samples_deprecated, rejection_sampling
 from pyapprox.visualization import get_meshgrid_function_data
@@ -83,10 +82,6 @@ def convergence_study(kernel, function, sampler,
     # Mesh the input space for evaluations of the real function,
     # the prediction and its MSE
 
-    # Qian: consider to have external validation samples
-    # validation_samples = generate_samples()
-    # validation_values = function(validation_samples).squeeze()
-
     num_samples = np.cumsum(num_new_samples)
     num_steps = num_new_samples.shape[0]
     errors = np.empty(num_steps, dtype=float)
@@ -139,9 +134,6 @@ def convergence_study(kernel, function, sampler,
 
             if sample_step >= 1:
                 errors[sample_step -1] = error_gp_comp
-            # else:
-            #     errors[sample_step] = error
-            # nsamples[sample_step] = sampler.ntraining_samples
                 nsamples[sample_step - 1] = num_samples[sample_step -1]
 
             pickle.dump(gp, open(f'gp_{sample_step}.pkl', "wb"))
@@ -207,7 +199,6 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
         x0 = self.temper_param+1e-4
         # result = root(lambda b: objective(b)-1, x0)
         # x_opt = result.x
-        breakpoint()
         x_opt = bisect(lambda b: objective(b)-1, x0, 1)
         self.temper_param = x_opt
 
@@ -235,36 +226,6 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
         return samples, flag
 
 
-def get_posterior_samples(num_vars, weight_function, nsamples):
-    x, w = get_tensor_product_quadrature_rule(
-        200, num_vars, np.polynomial.legendre.leggauss,
-        transform_samples=lambda x: (x+1)/2,
-        density_function=lambda x: 0.5*np.ones(x.shape[1]))
-    vals = weight_function(x)
-    C = 1/vals.dot(w)
-
-    def posterior_density(samples):
-        return weight_function(samples)*C
-
-    def proposal_density(samples):
-        return np.ones(samples.shape[1])
-
-    def generate_uniform_samples(nsamples):
-        return np.random.uniform(0, 1, (num_vars, nsamples))
-
-    def generate_proposal_samples(nsamples):
-        return np.random.uniform(0, 1, (num_vars, nsamples))
-
-    envelope_factor = C*vals.max()*1.1
-
-    rosenbrock_samples = rejection_sampling(
-        posterior_density, proposal_density,
-        generate_proposal_samples, envelope_factor,
-        num_vars, nsamples, verbose=True,
-        batch_size=None)
-
-    return rosenbrock_samples
-
 def get_prior_samples(num_vars, variables, nsamples):
     rosenbrock_samples = generate_independent_random_samples(variables, nsamples)
 
@@ -274,32 +235,22 @@ def bayesian_inference_example():
     init_scale = 0.1 # used to define length_scale for the kernel
     num_vars = 2
     num_candidate_samples = 10000
-    # need to talk with John about how to determine the values for num_new_samples
     num_new_samples = np.asarray([20]+[5]*6+[25]*6+[50]*8)
 
     nvalidation_samples = 10000
 
     prior_pdf = partial(
         tensor_product_pdf, univariate_pdfs=partial(stats.beta.pdf, a=1, b=1))
-    misfit_function = rosenbrock_function
-
-    # Qian: to decide
-    def weight_function(samples):
-        prior_vals = prior_pdf(samples).squeeze()
-        misfit_vals = misfit_function(samples).squeeze()
-        vals = np.exp(-misfit_vals)*prior_vals
-        return vals
 
     # Must set variables if not using uniform prior on [0,1]^D
     # variables = None
 
     from scipy.stats import uniform, beta, norm
-    uni_variable = [uniform(0, 2), uniform(0, 3)]
+    uni_variable = [uniform(0, 1), uniform(0, 1)]
     variables = IndependentMultivariateRandomVariable(uni_variable)
 
     # Get validation samples from prior
     rosenbrock_samples = get_prior_samples(num_vars, variables, nvalidation_samples + num_candidate_samples)
-    # rosenbrock_samples = get_posterior_samples(num_vars, weight_function, nvalidation_samples + num_candidate_samples)
 
     def generate_random_samples(nsamples, idx=0):
         assert idx+nsamples <= rosenbrock_samples.shape[1]
@@ -319,14 +270,6 @@ def bayesian_inference_example():
     # defining kernel
     length_scale = init_scale*np.ones(num_vars, dtype=float)
     kernel = RBF(length_scale, (5e-2, 1))
-
-    # define quadrature rule to compute f divergence
-    div_type = 'hellinger'
-    quad_x, quad_w = get_tensor_product_quadrature_rule(
-        200, num_vars, np.polynomial.legendre.leggauss, transform_samples=None,
-        density_function=None)
-    quad_x = (quad_x+1)/2
-    quad_rule = quad_x, quad_w
 
     # this is the one Qian should use. The others are for comparision only
     adaptive_cholesky_sampler = BayesianInferenceCholeskySampler(
@@ -351,17 +294,10 @@ def bayesian_inference_example():
         else:
             update_kernel_scale_num_samples = np.cumsum(num_new_samples)
 
-        divergences = []
         cond_nums = []
         temper_params = []
 
         def callback(gp):
-            approx_density = partial(unnormalized_posterior, gp, prior_pdf)
-            exact_density = weight_function
-            error = compute_f_divergence(
-                approx_density, exact_density, quad_rule, div_type, True)
-            # print ('divergence',error)
-            divergences.append(error)
             cond_nums.append(np.linalg.cond(gp.L_.dot(gp.L_.T)))
             if hasattr(sampler, 'temper_param'):
                 temper_params.append(sampler.temper_param)
@@ -374,7 +310,6 @@ def bayesian_inference_example():
             return_samples=True)
 
         np.savez(filename, nsamples=nsamples, errors=errors,
-                 divergences=np.asarray(divergences),
                  cond_nums=np.asarray(cond_nums), samples=samples,
                  temper_params=np.asarray(temper_params))
 
@@ -386,13 +321,15 @@ def bayesian_inference_example():
         filename = get_filename(method, fixed_scale)
         data = np.load(filename)
         nsamples, errors = data['nsamples'][:-1], data['errors'][:-1]
-        divergences, cond_nums = data['divergences'][:-1], data['cond_nums'][:-1]
-        # breakpoint()
+        temper_params, cond_nums = data['temper_params'][1:-1], data['cond_nums'][:-1]
         axs[0].loglog(nsamples, errors, ls=ls, label=label)
-        axs[1].loglog(nsamples, divergences, ls=ls, label=label)
-        axs[2].loglog(nsamples, cond_nums, ls=ls, label=label)
+        axs[1].loglog(nsamples, cond_nums, ls=ls, label=label)
+        axs[2].semilogy(np.arange(1, nsamples.shape[0]),
+                    temper_params, 'k-o')
+        axs[2].set_xlabel(r'$\mathrm{Iteration}$ $j$')
+        axs[2].set_ylabel(r'$\beta_j$')
 
-    for ii in range(3):
+    for ii in range(2):
         axs[ii].set_xlabel(r'$m$')
         axs[ii].set_xlim(10, 1000)
     axs[0].set_ylabel(r'$\tilde{\epsilon}_{\omega,2}$', rotation=90)
@@ -401,20 +338,11 @@ def bayesian_inference_example():
     ylim = [min(ylim0[0], ylim1[0]), max(ylim0[1], ylim1[1])]
     axs[0].set_ylim(ylim)
     axs[1].set_ylim(ylim)
-    axs[1].set_ylabel(r'$D_\mathrm{H}$', rotation=90)
-    axs[2].set_ylabel(r'$\kappa$', rotation=90)
+    axs[1].set_ylabel(r'$\kappa$', rotation=90)
 
     figname = 'bayes_example_comparison_%d.pdf' % num_vars
     axs[0].legend()
-    plt.savefig(figname)
-
-    method, fixed_scale = 'Learning-Weighted-Cholesky-b', False
-    filename = get_filename(method, fixed_scale)
-    print(filename)
-    adaptive_cholesky_samples = np.load(filename)['samples']
-    temper_params = np.load(filename)['temper_params']
-    nsamples = np.load(filename)['nsamples']
- 
+    plt.savefig(figname) 
 
 if __name__ == '__main__':
     try:
