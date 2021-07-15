@@ -30,7 +30,7 @@ from pyapprox.variables import IndependentMultivariateRandomVariable
 import matplotlib as mpl
 mpl.rcParams['font.size'] = 16
 mpl.rcParams['lines.linewidth'] = 3
-mpl.rcParams['text.usetex'] = True  # use latex for all text handling
+mpl.rcParams['text.usetex'] = False  # use latex for all text handling
 mpl.rcParams['savefig.bbox'] = 'tight'
 mpl.rcParams['savefig.format'] = 'pdf'  # gives best resolution plots
 mpl.rcParams['axes.labelsize'] = 20
@@ -197,7 +197,7 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
     def increment_temper_param(self, num_training_samples):
 
         # Sample over the user-defined variable distributions.
-        samples = (generate_independent_random_samples)(self.variables, 1000)
+        samples = (generate_independent_random_samples)(self.variables, 2000)
         # samples = np.random.uniform(0, 2, (self.nvars, 1000))
         density_vals_prev = self.weight_function(samples)
         def objective(beta):
