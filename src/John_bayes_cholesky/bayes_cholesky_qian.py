@@ -45,7 +45,9 @@ mpl.rcParams['text.latex.preamble'] = \
 
 def rosenbrock_function(x):
     assert x.shape[0] == 2
-    x = 4*x-2
+    # John edited
+    # x = 4*x-2 # map [0,1] to -2,2
+    x = 2*x-2 # map [0, 2] to -2,2
     vals = ((1.-x[0, :])**2+100*(x[1, :]-x[0, :]**2)**2)[:, np.newaxis]
     # vals = ((1.-x[0,:])**2+1*(x[1,:]-x[0,:]**2)**2)[:,np.newaxis]
     return vals
@@ -244,8 +246,8 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
 def get_posterior_samples(num_vars, weight_function, nsamples):
     x, w = get_tensor_product_quadrature_rule(
         200, num_vars, np.polynomial.legendre.leggauss,
-        transform_samples=lambda x: (x+1)/2,
-        density_function=lambda x: 0.5*np.ones(x.shape[1]))
+        transform_samples=lambda x: (x+1),
+        density_function=lambda x: 0.5*np.ones(x.shape[1])) # John edited for U[0, 2]
     vals = weight_function(x)
     C = 1/vals.dot(w)
 
@@ -256,10 +258,12 @@ def get_posterior_samples(num_vars, weight_function, nsamples):
         return np.ones(samples.shape[1])
 
     def generate_uniform_samples(nsamples):
-        return np.random.uniform(0, 1, (num_vars, nsamples))
+        # John edited for U[0, 2]
+        return np.random.uniform(0, 2, (num_vars, nsamples))
 
     def generate_proposal_samples(nsamples):
-        return np.random.uniform(0, 1, (num_vars, nsamples))
+        # John edited for U[0, 2]
+        return np.random.uniform(0, 2, (num_vars, nsamples))
 
     envelope_factor = C*vals.max()*1.1
 
@@ -280,8 +284,9 @@ def bayesian_inference_example():
 
     nvalidation_samples = 10000
 
+    # add scale for the distribution U[0, 2]
     prior_pdf = partial(
-        tensor_product_pdf, univariate_pdfs=partial(stats.beta.pdf, a=1, b=1))
+        tensor_product_pdf, univariate_pdfs=partial(stats.beta.pdf, a=1, b=1, scale=2))
     misfit_function = rosenbrock_function
 
     def weight_function(samples):
@@ -323,7 +328,10 @@ def bayesian_inference_example():
     quad_x, quad_w = get_tensor_product_quadrature_rule(
         200, num_vars, np.polynomial.legendre.leggauss, transform_samples=None,
         density_function=None)
-    quad_x = (quad_x+1)/2
+    
+    # John edited
+    # quad_x = (quad_x+1)/2 # map rule to [0, 1]
+    quad_x = (quad_x+1) # map rule to [0, 2]
     quad_rule = quad_x, quad_w
 
     fig, axs = plt.subplots(1, 3, figsize=(3*8, 6), sharey=False)
@@ -349,14 +357,14 @@ def bayesian_inference_example():
     halton_sampler = HaltonSampler(num_vars, variables)
 
     samplers = [oracle_cholesky_sampler, prior_cholesky_sampler,
-                adaptive_cholesky_sampler, halton_sampler][1:]
+                adaptive_cholesky_sampler, halton_sampler][2:]
     methods = ['Oracle-Weighted-Cholesky-b', 'Prior-Weighted-Cholesky-b',
-               'Learning-Weighted-Cholesky-b', 'Halton'][1:]
+               'Learning-Weighted-Cholesky-b', 'Halton'][2:]
     labels = [r'$\mathrm{Oracle\;Weighted\;Cholesky}$',
               r'$\mathrm{Prior\;Weighted\;Cholesky}$',
               r'$\mathrm{Adapted\;Weighted\;Cholesky}$',
-              r'$\mathrm{Halton}$'][1:]
-    fixed_scales = [True, False, False, False][1:]
+              r'$\mathrm{Halton}$'][2:]
+    fixed_scales = [True, False, False, False][2:]
 
     for sampler, method, fixed_scale in zip(samplers, methods, fixed_scales):
         filename = get_filename(method, fixed_scale)
@@ -450,7 +458,8 @@ def bayesian_inference_example():
         def weight_function(x): return prior_pdf(x).squeeze()*np.exp(
             -misfit_function(x).squeeze())**beta
         # plt.figure(figsize=(8,6))
-        plt_ranges = [0, 1, 0, 1]
+        # John changed plot ranges
+        plt_ranges = [0, 2, 0, 2]
         X, Y, Z = get_meshgrid_function_data(weight_function, plt_ranges, 30)
         pp = axs[cnt].contourf(X, Y, Z,
                                # levels=np.linspace(Z.min(),Z.max(),20),
