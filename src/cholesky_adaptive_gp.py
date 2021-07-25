@@ -98,6 +98,7 @@ def run_source_lsq(vars, vs_list=vs_list):
                     'pbias': sp.objectivefunctions.pbias
                 }
         obj = []
+        assert x_obs.shape[0] == x_mod.shape[0], "Observation and simultion should be of the same length."
         for  k in range(x_mod.shape[1]):
             obj.append(obj_map[obj_type](x_obs, x_mod[:, k].reshape(x_mod.shape[0], 1)))
         if obj[0] == 0: obj[0] = 1e-8
@@ -136,7 +137,6 @@ def run_source_lsq(vars, vs_list=vs_list):
 
     # breakpoint()
     obj = cal_obj(obs_din, din_126001A, obj_type = 'nse')
-    breakpoint()
     print(f'Finish {obj.shape[0]} run')
 
     return obj
@@ -243,6 +243,7 @@ def convergence_study(kernel, function, sampler,
 def unnormalized_posterior(gp, prior_pdf, samples, temper_param=1):
     prior_vals = prior_pdf(samples).squeeze()
     gp_vals = gp.predict(samples.T).squeeze()
+    breakpoint()
     unnormalized_posterior_vals = prior_vals*np.exp(-gp_vals)**temper_param
     return unnormalized_posterior_vals
 
@@ -326,8 +327,11 @@ def bayesian_inference_example():
     datapath = file_settings()[1]
     para_info = pd.read_csv(datapath + 'Parameters-PCE.csv')
 
-    # define the variables for PCE
+# define the variables for PCE
     param_file = file_settings()[-1]
+    
+    # Must set variables if not using uniform prior on [0,1]^D
+    # variables = None
     ind_vars, variables = variables_prep(param_file, product_uniform='uniform', dummy=False)
     var_trans = AffineRandomVariableTransformation(variables, enforce_bounds=True)
     init_scale = 0.1 # used to define length_scale for the kernel
@@ -340,16 +344,8 @@ def bayesian_inference_example():
     from scipy import stats 
     # breakpoint()
     prior_pdf = partial(tensor_product_pdf, 
-        univariate_pdfs=[partial(stats.uniform.pdf, *ind_vars[ii].args) for ii in range(num_vars)])
+        univariate_pdfs=[partial(stats.beta.pdf, a=1, b=1, scale=ind_vars[ii].args[1]) for ii in range(num_vars)])
 
-    # Must set variables if not using uniform prior on [0,1]^D
-    # variables = None
-
-    # prior_pdf = partial(
-    #     tensor_product_pdf, univariate_pdfs=partial(stats.beta.pdf, a=1, b=1))
-    # from scipy.stats import uniform, beta, norm
-    # uni_variable = [uniform(0, 1), uniform(0, 1)]
-    # variables = IndependentMultivariateRandomVariable(uni_variable)
 
     # Get validation samples from prior
     rosenbrock_samples = get_prior_samples(num_vars, variables, nvalidation_samples + num_candidate_samples)
