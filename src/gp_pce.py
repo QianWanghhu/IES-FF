@@ -128,18 +128,88 @@ def run_source_lsq(vars, pce_list=pce_list):
     for ii in range(len(pce_list)):
         din_126001A[ii, :] = pce_list[ii](vars).flatten()
 
-    
     obj = cal_obj(obs_din, din_126001A, obj_type = 'viney')
     print(f'Finish {obj.shape[0]} run')
+
+    # calculate the objective NSE and PBIAS
+    obj_nse = cal_obj(obs_din, din_126001A, obj_type = 'nse')
+    obj_pbias = cal_obj(obs_din, din_126001A, obj_type = 'pbias')
+    train_iteration = np.append(vars, obj_nse.T, axis=0)
+    train_iteration = np.append(train_iteration, obj_pbias.T, axis=0)
+    # save sampling results of NSE and PBIAS
+    train_file = '../data/training_samples.txt'
+    if os.path.exists(train_file):
+        train_samples = np.loadtxt(train_file)
+        train_samples = np.append(train_samples, train_iteration, axis=1)
+        np.savetxt(train_file, train_samples)
+    else:
+        np.savetxt(train_file, train_iteration) 
+    # END if-else
 
     return obj
 # END run_source_lsq()
 
+def resample_candidate(gp, sampler, thsd, gp_ob1=None, gp_ob2=None):
+
+    def filter_samples(gp_surrogate, samples, threshold, return_std=True, obj = 'nse'):
+        """
+        This is used to filter the samples that satisfy the constraint, 
+            e.g., objective values > a certain threshold.
+        """
+        # check whether to return the standard deviation for the uncertainty
+        if return_std: 
+            y_hat, y_std = gp_surrogate.predict(samples.T, return_std)
+        else:
+            y_hat = gp_surrogate.predict(samples.T, return_std)
+            y_std = np.zeros_like(y_hat)
+        # End if-else
+        
+        # if the objective function is PBIAS, use both the upper bound and lower bound to constrain
+        if obj != 'pbias':
+            index_temp = np.where((y_hat + 1.96 * y_std) > threshold)
+        else: 
+            cond1 = ((y_hat + 1.96 * y_std) < threshold)
+            cond2 = ((y_hat - 1.96 * y_std) > -threshold)
+            index_temp = np.where(cond1 & cond2)
+        
+        return index_temp
+        # END filter_samples  
+    
+    y_temp = gp.predict(sampler.candidate_samples.T)
+    index_temp = np.where(y_temp > np.sort(y_temp, axis=0)[-1000])
+    # index_temp = np.argsort(y_temp)[-1000:]
+    x_select = sampler.candidate_samples[:, index_temp[0]]
+    x_max = x_select.max(axis=1)
+
+    assert thsd.shape[0] == 3, "The first dimension of thsd should be 3."
+    univariable_temp = [stats.uniform(0, x_max[ii]) for ii in range(0, x_max.shape[0])]
+    variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
+    new_candidates = generate_candidate_samples(sampler.candidate_samples.shape[0],
+        sampler.candidate_samples.shape[1] + 20000, 
+        generate_random_samples=None, variables=variable_temp)
+    
+    obj_list = ['viney', 'nse', 'pbias']
+    gp_all = [gp, gp_ob1, gp_ob2 ]
+    index_satis = {}
+    # find the sample index that satisfy each criteria
+    for gp_model, threshold, objective in zip(gp_all, thsd, obj_list):
+        index_satis[objective] = filter_samples(gp_model, new_candidates, 
+            threshold, return_std=True, obj = objective)
+    
+    # find the common index filtered by the three constraints
+    index_intersect = np.intersect1d(index_satis[obj_list[0]], index_satis[obj_list[1]])
+    index_intersect = np.intersect1d(index_intersect, index_satis[obj_list[2]])
+    new_candidates_select = new_candidates[:, index_intersect]        
+
+    return new_candidates
+
+>>>>>>> Set the optimization with three GPs
 def convergence_study(kernel, function, sampler,
                       num_vars, generate_samples, num_new_samples,
                       update_kernel_scale_num_samples,
                       noise_level=0, return_samples=False,
-                      norm=np.linalg.norm, callback=None, gp_kernel=None):
+                      norm=np.linalg.norm, callback=None, gp_kernel=None,
+                      gp_kernel_ob1=None, gp_kernel_ob2=None):
 
     # dirty hack to include two GP kernel types (for IVAR)
     if hasattr(kernel, "__len__"):
@@ -153,9 +223,19 @@ def convergence_study(kernel, function, sampler,
     # Instantiate a Gaussian Process model
     if gp_kernel is None:
         gp_kernel = kernel
+    
+    if gp_kernel_ob1 is not None:
+        gp_ob1 =  AdaptiveGaussianProcess(
+        gp_kernel_ob1, n_restarts_optimizer=2, alpha=1e-12)
+        gp_ob1.optimizer = "fmin_l_bfgs_b"
+    
+    if gp_kernel_ob2 is not None:
+        gp_ob2 =  AdaptiveGaussianProcess(
+        gp_kernel_ob2, n_restarts_optimizer=2, alpha=1e-12)
+        gp_ob2.optimizer = "fmin_l_bfgs_b"
 
     gp = AdaptiveGaussianProcess(
-        gp_kernel, n_restarts_optimizer=10, alpha=1e-12)
+        gp_kernel, n_restarts_optimizer=2, alpha=1e-12)
     gp.setup(function, sampler)
     if hasattr(sampler, "set_gaussian_process"):
         sampler.set_gaussian_process(gp)
@@ -192,6 +272,11 @@ def convergence_study(kernel, function, sampler,
             optimizer_step += 1
 
         flag = gp.refine(np.sum(num_new_samples[:sample_step+1]))
+
+        # load the taining samples for NSE and PBIAS
+        train_samples_other = np.loadtxt('../data/training_samples.txt')
+        gp_ob1.fit(train_samples_other[0:num_vars, :], train_samples_other[num_vars:(num_vars + 1), :].T)
+        gp_ob2.fit(train_samples_other[0:num_vars, :], train_samples_other[(num_vars + 1):(num_vars + 2), :].T)
         
         # allow points to be added to gp more often than gp is evaluated for
         # validation
@@ -224,6 +309,19 @@ def convergence_study(kernel, function, sampler,
             print('Terminating study. Points are becoming ill conditioned')
             break
 
+        # check whether the performance of gp is satisfactory
+        if sample_step > 2:
+            if (errors[-2] < 0.05) & (errors[-1] < 0.05):
+                thsd = [0.383, 0.5, 0.2]        
+                new_candidates = resample_candidate(gp, sampler, thsd, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
+                thsd_viney = 0.383
+                while new_candidates.shape[1] < 100:
+                    thsd = [thsd_viney, 0, 1]        
+                    new_candidates = resample_candidate(gp, sampler, thsd, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
+                    thsd_viney = thsd_viney - 0.1
+                sampler.candidate_samples = new_candidates
+
+>>>>>>> Set the optimization with three GPs
     if return_samples:
         return errors, nsamples, sampler.training_samples[:, 0:num_samples[sample_step - 1]]
 
@@ -233,7 +331,10 @@ def convergence_study(kernel, function, sampler,
 def unnormalized_posterior(gp, prior_pdf, samples, temper_param=1):
     prior_vals = prior_pdf(samples).squeeze()
     gp_vals = gp.predict(samples.T).squeeze()
-    unnormalized_posterior_vals = prior_vals*(1 / (1 - gp_vals))**temper_param
+    vals_max = max(gp_vals.max(), 0.1)
+    # breakpoint()
+    # unnormalized_posterior_vals = prior_vals*((2 - vals_max) / (2 - gp_vals))**temper_param
+    unnormalized_posterior_vals = prior_vals*np.exp(-(1 - gp_vals / vals_max))**temper_param
     return unnormalized_posterior_vals
 
 
@@ -260,32 +361,33 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
     def increment_temper_param(self, num_training_samples):
 
         # samples = np.random.uniform(0, 1, (self.nvars, 1000))
-        samples = generate_independent_random_samples(self.variables, 1000)
+        samples = generate_independent_random_samples(self.variables, 2000)
         density_vals_prev = self.weight_function(samples)
 
-        # def objective(beta):
-        #     new_weight_function = partial(
-        #         unnormalized_posterior, self.gp, self.prior_pdf,
-        #         temper_param=beta)
-        #     density_vals = new_weight_function(samples)
-
-        #     breakpoint()
-        #     II = np.where(density_vals_prev > 1e-15)[0]
-        #     JJ = np.where(density_vals_prev < 1e-15)[0]
-        #     assert len(np.where(density_vals[JJ] > 1e-15)[0]) == 0
-        #     ratio = np.zeros(samples.shape[1])
-        #     ratio[II] = density_vals[II]/density_vals_prev[II]
-        #     obj = ratio.std()/ratio.mean()
-        #     return obj
-        # print('temper parameter', self.temper_param)
-        # x0 = self.temper_param+1e-2
-        # # result = root(lambda b: objective(b)-1, x0)
-        # # x_opt = result.x
-        # # breakpoint()
+        def objective(beta):
+            new_weight_function = partial(
+                unnormalized_posterior, self.gp, self.prior_pdf,
+                temper_param=beta)
+            density_vals = new_weight_function(samples)
+            II = np.where(density_vals_prev > 1e-15)[0]
+            JJ = np.where(density_vals_prev < 1e-15)[0]
+            assert len(np.where(density_vals[JJ] > 1e-15)[0]) == 0
+            ratio = np.zeros(samples.shape[1])
+            ratio[II] = density_vals[II]/density_vals_prev[II]
+            # breakpoint()
+            obj = ratio.std()/ratio.mean()
+            return obj
+        print('temper parameter', self.temper_param)
+        x0 = self.temper_param+1e-4
+        # result = root(lambda b: objective(b)-1, x0)
+        # x_opt = result.x
         
-        # x_opt = bisect(lambda b: objective(b)-1, x0, 1)
+        if self.temper_param == 0:
+            x_opt = bisect(lambda b: objective(b)-1, x0, 1)
+        else:
+            x_opt = bisect(lambda b: objective(b)-1, x0, 1)
         # if not optimize temper_param
-        x_opt = self.temper_param + 1e-2
+        # x_opt = self.temper_param + 1e-2
         self.temper_param = x_opt
 
     def __call__(self, num_samples):
@@ -322,7 +424,7 @@ def bayesian_inference_example():
     datapath = file_settings()[1]
     para_info = pd.read_csv(datapath + 'Parameters-PCE.csv')
 
-# define the variables for PCE
+    # define the variables for PCE
     param_file = file_settings()[-1]
     
     # Must set variables if not using uniform prior on [0,1]^D
@@ -366,6 +468,15 @@ def bayesian_inference_example():
         (5e-2, 10), (5e-2, 5), (5e-2, 10), (5e-2, 5), (5e-2, 10), 
         (5e-2, 5), (5e-2, 10), (5e-2, 5), (5e-2, 10)])
 
+    # define gp_kernel_ob1/ob2 for objective functions individually
+    gp_kernel_ob1 = RBF(length_scale, [(5e-2, 0.2), (5e-2, 0.2), (5e-2, 10), (5e-2, 5),
+        (5e-2, 10), (5e-2, 5), (5e-2, 10), (5e-2, 5), (5e-2, 10), 
+        (5e-2, 5), (5e-2, 10), (5e-2, 5), (5e-2, 10)])
+
+    gp_kernel_ob2 = RBF(length_scale, [(5e-2, 0.2), (5e-2, 0.2), (5e-2, 10), (5e-2, 5),
+        (5e-2, 10), (5e-2, 5), (5e-2, 10), (5e-2, 5), (5e-2, 10), 
+        (5e-2, 5), (5e-2, 10), (5e-2, 5), (5e-2, 10)])
+
     # this is the one Qian should use. The others are for comparision only
     adaptive_cholesky_sampler = BayesianInferenceCholeskySampler(
         prior_pdf, num_vars, num_candidate_samples, variables,
@@ -402,7 +513,8 @@ def bayesian_inference_example():
             kernel, run_source_lsq, sampler, num_vars,
             generate_validation_samples, num_new_samples,
             update_kernel_scale_num_samples, callback=callback,
-            return_samples=True)
+            return_samples=True, 
+            gp_kernel_ob1=gp_kernel_ob1, gp_kernel_ob2=gp_kernel_ob2)
 
         np.savez(filename, nsamples=nsamples, errors=errors,
                  cond_nums=np.asarray(cond_nums), samples=samples,
