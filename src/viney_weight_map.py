@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+from multiprocessing import Pool
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from functools import partial
+import time
+import copy
+import pandas as pd
+
+import matplotlib as mpl
+
+
+mpl.rcParams['font.size'] = 16
+mpl.rcParams['lines.linewidth'] = 3
+mpl.rcParams['text.usetex'] = False  # use latex for all text handling
+mpl.rcParams['savefig.bbox'] = 'tight'
+mpl.rcParams['savefig.format'] = 'pdf'  # gives best resolution plots
+mpl.rcParams['axes.labelsize'] = 20
+mpl.rcParams['axes.titlesize'] = 20
+mpl.rcParams['xtick.labelsize'] = 20
+mpl.rcParams['ytick.labelsize'] = 20
+mpl.rcParams['legend.fontsize'] = 16
+# print mpl.rcParams.keys()
+mpl.rcParams['text.latex.preamble'] = \
+    r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
+
+
+def calculate_weight(prior_vals, gp_vals, gp_max, temper_parameter):
+    weight = prior_vals*np.exp(-(1 - gp_vals / gp_max))**temper_parameter
+    # weight = prior_vals*((2 - gp_max) / (2 - gp_vals))**temper_parameter
+    return weight
+
+prior_vals = 6.4e-10
+vals_max = [0.1, 0.5, 1]
+temper_parameter = [0.01, 0.1, 0.5]
+legends = [f'GP max value: {v}' for v in vals_max]
+
+fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+
+for ii in range(len(temper_parameter)):
+    for jj in range(len(vals_max)):
+        gp_vals = np.linspace(-100, vals_max[jj], 10000)
+        weights = calculate_weight(prior_vals, gp_vals, vals_max[jj], temper_parameter[ii])
+        axes[ii].plot(np.log(1 - gp_vals), weights, alpha=0.7)
+    axes[ii].set_xlabel('GP vals')
+    axes[ii].set_title(f'temper param: {temper_parameter[ii]}')
+
+axes[0].legend(legends)
+axes[0].set_ylabel('Weights')
+# plt.savefig('gp_weights_map_option1.pdf', dpi=300)
