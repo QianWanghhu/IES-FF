@@ -170,7 +170,7 @@ def run_source_lsq(vars, vs_list=vs_list):
 
 def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None):
 
-    def filter_samples(gp_surrogate, samples, threshold, num_samples, return_std=True, obj = 'nse'):
+    def filter_samples(gp_surrogate, num_candidates, samples, threshold, num_samples, return_std=True, obj = 'nse'):
         """
         This is used to filter the samples that satisfy the constraint, 
             e.g., objective values > a certain threshold.
@@ -186,13 +186,14 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
         # if the objective function is PBIAS, use both the upper bound and lower bound to constrain
         if obj != 'pbias':
             # breakpoint()
-            y_upper = y_hat.flatten() + 1.96 * y_std
+            # y_upper = y_hat.flatten() + 1.96 * y_std
+            y_upper = y_hat
             index_temp = np.where(y_upper > threshold)[0]
-            threshold_temp = np.sort(y_upper, axis=0)[-901]
+            threshold_temp = np.sort(y_upper, axis=0)[-(num_candidates - gp_surrogate.y_train_.shape[0] + 1)]
             if ((index_temp.shape[0] < (num_samples[-1] + 1)) | (threshold_temp < 0)):
                 index_temp = np.where(y_upper > threshold_temp)[0]
             else:
-                threshold_temp = 0
+                # threshold_temp = 0
                 index_temp = np.where(y_upper > threshold_temp)[0]
         else: 
             cond1 = ((y_hat.flatten() + 1.96 * y_std) < threshold)
@@ -203,7 +204,8 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
         # END filter_samples  
     
     y_temp, y_temp_std = gp.predict(sampler.candidate_samples.T, return_std=True)
-    y_temp_upper =  y_temp.flatten() + 1.96 * y_temp_std
+    # y_temp_upper =  y_temp.flatten() + 1.96 * y_temp_std
+    y_temp_upper = y_temp
     if np.sort(y_temp_upper, axis=0)[-100] > 0:
         index_temp = np.where(y_temp_upper > 0)[0]
     else:
@@ -229,15 +231,19 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
     thsd_dict = {}
     # find the sample index that satisfy each criteria
     for gp_model, threshold, objective in zip(gp_all, thsd, obj_list):
-        index_satis[objective], thsd_dict[objective] = filter_samples(gp_model, new_candidates, 
-            threshold, num_samples, return_std=True, obj = objective)
+        index_satis[objective], thsd_dict[objective] = filter_samples(gp_model, 
+            sampler.candidate_samples.shape[1], new_candidates, 
+                threshold, num_samples, return_std=True, obj = objective)
     # breakpoint()
     # find the common index filtered by the three constraints
     # index_intersect = np.intersect1d(index_satis[obj_list[0]], index_satis[obj_list[1]])
     # index_intersect = np.intersect1d(index_intersect, index_satis[obj_list[2]])
-    new_candidates_select = new_candidates[:, index_satis[obj_list[0]]]        
+    all_pivots = np.arange(sampler.candidate_samples.shape[1])
+    new_candidates_select = new_candidates[:, index_satis[obj_list[0]]]
+    # breakpoint()        
+    sampler.candidate_samples[:, np.delete(all_pivots, sampler.init_pivots)] = new_candidates_select
 
-    return new_candidates_select, thsd_dict[objective]
+    return  sampler.candidate_samples, thsd_dict[objective]
 
 
 def convergence_study(kernel, function, sampler,
@@ -362,12 +368,15 @@ def convergence_study(kernel, function, sampler,
             print(f'--------Error of step {sample_step - 2}: {errors[sample_step - 2]}')
             print(f'--------Error of step {sample_step - 3}: {errors[sample_step - 3]}')
 
-            if resample_flag:
+            y_training = gp.y_train_
+            num_y_optimize = y_training[y_training >= 0.382].shape[0]
+
+            if resample_flag & (num_y_optimize <= 20):
                 new_candidates, thsd_viney = resample_candidate(gp, sampler, thsd, 
                     num_samples, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
 
                 sampler.candidate_samples = new_candidates
-                sampler.init_pivots = None
+                # sampler.init_pivots = None
 
                 print(f'---------Threhsolds used to constrain parameter ranges:')
                 print(f' viney_F: {thsd_viney}')

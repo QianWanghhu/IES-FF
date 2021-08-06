@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from multiprocessing import Pool
+from sys import breakpointhook
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -153,7 +154,7 @@ def run_source_lsq(vars, pce_list=pce_list):
 
 def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None):
 
-    def filter_samples(gp_surrogate, samples, threshold, num_samples, return_std=True, obj = 'nse'):
+    def filter_samples(gp_surrogate, num_candidates, samples, threshold, num_samples, return_std=True, obj = 'nse'):
         """
         This is used to filter the samples that satisfy the constraint, 
             e.g., objective values > a certain threshold.
@@ -171,18 +172,18 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
             # breakpoint()
             y_upper = y_hat.flatten() + 1.96 * y_std
             index_temp = np.where(y_upper > threshold)[0]
-            threshold_temp = np.sort(y_upper, axis=0)[-801]
+            threshold_temp = np.sort(y_upper, axis=0)[-(num_candidates - gp_surrogate.y_train_.shape[0] + 1)]
             if ((index_temp.shape[0] < num_samples[-1]) | (threshold_temp < 0)):
                 index_temp = np.where(y_upper > threshold_temp)[0]
             else:
-                threshold = 0
-                index_temp = np.where(y_upper > threshold)[0]
+                # threshold = 0
+                index_temp = np.where(y_upper > threshold_temp)[0]
         else: 
             cond1 = ((y_hat.flatten() + 1.96 * y_std) < threshold)
             cond2 = ((y_hat.flatten() - 1.96 * y_std) > -threshold)
             index_temp = np.where(cond1 & cond2)[0]
         
-        return index_temp, threshold
+        return index_temp, threshold_temp
         # END filter_samples  
     
     y_temp, y_temp_std = gp.predict(sampler.candidate_samples.T, return_std=True)
@@ -213,15 +214,19 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
     thsd_dict = {}
     # find the sample index that satisfy each criteria
     for gp_model, threshold, objective in zip(gp_all, thsd, obj_list):
-        index_satis[objective], thsd_dict[objective] = filter_samples(gp_model, new_candidates, 
-            threshold, num_samples, return_std=True, obj = objective)
+        index_satis[objective], thsd_dict[objective] = filter_samples(gp_model, 
+            sampler.candidate_samples.shape[1], new_candidates, 
+                threshold, num_samples, return_std=True, obj = objective)
     # breakpoint()
     # find the common index filtered by the three constraints
     # index_intersect = np.intersect1d(index_satis[obj_list[0]], index_satis[obj_list[1]])
     # index_intersect = np.intersect1d(index_intersect, index_satis[obj_list[2]])
-    new_candidates_select = new_candidates[:, index_satis[obj_list[0]]]        
+    all_pivots = np.arange(sampler.candidate_samples.shape[1])
+    new_candidates_select = new_candidates[:, index_satis[obj_list[0]]]
+    # breakpoint()        
+    sampler.candidate_samples[:, np.delete(all_pivots, sampler.init_pivots)] = new_candidates_select
 
-    return new_candidates_select, thsd_dict[objective]
+    return sampler.candidate_samples, thsd_dict[objective]
 
 def convergence_study(kernel, function, sampler,
                       num_vars, generate_samples, num_new_samples,
@@ -289,7 +294,7 @@ def convergence_study(kernel, function, sampler,
         else:
             gp.optimizer = "fmin_l_bfgs_b"
             optimizer_step += 1
-
+        
         flag = gp.refine(np.sum(num_new_samples[:sample_step+1]))
 
         # load the taining samples for NSE and PBIAS
@@ -334,7 +339,7 @@ def convergence_study(kernel, function, sampler,
                 print('----case 1-----')
                 thsd = [0.382, 0.0, 1]
                 resample_flag = True
-            elif (errors[sample_step - 2] > 0.2) | (errors[sample_step-3] > 0.2):
+            elif (errors[sample_step - 2] > 0.5) | (errors[sample_step-3] > 0.5):
                 print('----case 2-----')
                 resample_flag = False
             else:
@@ -345,12 +350,15 @@ def convergence_study(kernel, function, sampler,
             print(f'--------Error of step {sample_step - 2}: {errors[sample_step - 2]}')
             print(f'--------Error of step {sample_step - 3}: {errors[sample_step - 3]}')
 
-            if resample_flag:
+            y_training = gp.y_train_
+            num_y_optimize = y_training[y_training >= 0.382].shape[0]
+
+            if resample_flag & (num_y_optimize <= 20):
                 new_candidates, thsd_viney = resample_candidate(gp, sampler, thsd, 
                     num_samples, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
 
                 sampler.candidate_samples = new_candidates
-                sampler.init_pivots = None
+                # sampler.init_pivots = None
 
                 print(f'---------Threhsolds used to constrain parameter ranges:')
                 print(f' viney_F: {thsd_viney}')
@@ -468,7 +476,7 @@ def bayesian_inference_example():
     init_scale = 0.2# used to define length_scale for the kernel
     num_vars = variables.nvars
     num_candidate_samples = 20000
-    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[20]*16)
+    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[20]*10)
 
     nvalidation_samples = 10000
 
@@ -476,7 +484,6 @@ def bayesian_inference_example():
     # breakpoint()
     prior_pdf = partial(tensor_product_pdf, 
         univariate_pdfs=[partial(stats.beta.pdf, a=1, b=1, scale=ind_vars[ii].args[1]) for ii in range(num_vars)])
-
 
     # Get validation samples from prior
     rosenbrock_samples = get_prior_samples(num_vars, variables, nvalidation_samples + num_candidate_samples)
@@ -593,3 +600,7 @@ if __name__ == '__main__':
         raise Exception(msg)
 
     bayesian_inference_example()
+
+# gp_load = pickle.load(open(f'gp_0.pkl', "rb"))
+# x_training = gp_load.X_train_
+# y_training = gp_load.y_train_
