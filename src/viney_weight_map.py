@@ -36,16 +36,16 @@ vals_max = [0.1, 0.5, 1]
 temper_parameter = [0.01, 0.1, 0.5]
 legends = [f'GP max value: {v}' for v in vals_max]
 
-fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+fig, axes = plt.subplots(1, 3, figsize=(22, 6))
 
 for ii in range(len(temper_parameter)):
     for jj in range(len(vals_max)):
         gp_vals = np.linspace(-100, vals_max[jj], 10000)
         weights = calculate_weight(prior_vals, gp_vals, vals_max[jj], temper_parameter[ii])
-        axes[ii].plot(np.log(1 - gp_vals), weights, alpha=0.7)
-    axes[ii].set_xlabel('GP vals')
+        axes[ii].semilogx((1 - gp_vals), weights, alpha=0.7)
+    axes[ii].set_xlabel('1 - (GP_vals)')
     axes[ii].set_title(f'temper param: {temper_parameter[ii]}')
 
 axes[0].legend(legends)
 axes[0].set_ylabel('Weights')
-# plt.savefig('gp_weights_map_option1.pdf', dpi=300)
+plt.savefig('gp_weights_map.pdf', dpi=300)
