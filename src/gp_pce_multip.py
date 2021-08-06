@@ -51,27 +51,23 @@ mpl.rcParams['legend.fontsize'] = 16
 mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
-# Create the copy of models and veneer list
-project_name = 'MW_BASE_RC10.rsproj'
-veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-first_port=15000; num_copies = 8
-_, things_to_record, _, _, _ = modeling_settings()
-processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
+# read pces and use them for prediction
+vs_list = []
+def run_source_annual(vars, vs_list):
+    pass
 
-vs_list = vs_settings(ports, things_to_record)
-# obtain the initial values of parameters 
-initial_values = obtain_initials(vs_list[0])
+pce_names = [f'../output/pce-{i}-level4.pkl' for i in range(2009, 2018)]
+pce_list = []
+for fn in pce_names:
+    pce_list.append(pickle.load(open(fn, "rb")))
 
-def run_source_lsq(vars, vs_list=vs_list):
+
+def run_source_lsq(vars, pce_list=pce_list):
     """
     Script used to run_source and return the output file.
     The function is called by AdaptiveLejaPCE.
     """
-    from funcs.modeling_funcs import modeling_settings, generate_observation_ensemble
-    import spotpy as sp
-    print('Read Parameters')
-    parameters = pd.read_csv('../data/Parameters-PCE.csv', index_col='Index')
-
+    
     # Use annual or monthly loads
     def timeseries_sum(df, temp_scale = 'annual'):
         """
@@ -120,32 +116,19 @@ def run_source_lsq(vars, vs_list=vs_list):
     vars_copy = copy.deepcopy(vars)
     vars_copy[0, :] = vars_copy[0, :] * 100
     vars_copy[1, :] = vars_copy[1, :] * 100
-
     # import observation if the output.txt requires the use of obs.
     date_range = pd.to_datetime(['2009/07/01', '2018/06/30'])
     observed_din = pd.read_csv(f'{file_settings()[1]}126001A.csv', index_col='Date')
     observed_din.index = pd.to_datetime(observed_din.index)
     observed_din = observed_din.loc[date_range[0]:date_range[1], :].filter(items=[observed_din.columns[0]]).apply(lambda x: 1000 * x)
     
-    # loop over the vars and try to use parallel     
-    parameter_df = pd.DataFrame(index=np.arange(vars.shape[1]), columns=parameters.Name_short)
-    for i in range(vars.shape[1]):
-        parameter_df.iloc[i] = vars[:, i]
-
-    # set the time period of the results
-    retrieve_time = [pd.Timestamp('2009-07-01'), pd.Timestamp('2018-06-30')]
-
-    # define the modeling period and the recording variables
-    _, _, criteria, start_date, end_date = modeling_settings()
-    din = generate_observation_ensemble(vs_list, 
-        criteria, start_date, end_date, parameter_df, retrieve_time)
-
     # obtain the sum at a given temporal scale
-    din_126001A = timeseries_sum(din, temp_scale = 'annual')
     obs_din = timeseries_sum(observed_din, temp_scale = 'annual')
-    din_126001A = pd.DataFrame(din_126001A,dtype='float').values
     obs_din = pd.DataFrame(obs_din,dtype='float').values
-
+    
+    din_126001A = np.zeros((len(pce_list), vars_copy.shape[1]))
+    for ii in range(len(pce_list)):
+        din_126001A[ii, :] = pce_list[ii](vars_copy).flatten()
 
     obj = cal_obj(obs_din, din_126001A, obj_type = 'viney')
     print(f'Finish {obj.shape[0]} run')
@@ -188,27 +171,28 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
             # breakpoint()
             y_upper = y_hat.flatten() + 1.96 * y_std
             index_temp = np.where(y_upper > threshold)[0]
-            threshold_temp = np.sort(y_upper, axis=0)[-901]
-            if ((index_temp.shape[0] < (num_samples[-1] + 1)) | (threshold_temp < 0)):
+            threshold_temp = np.sort(y_upper, axis=0)[-801]
+            if ((index_temp.shape[0] < num_samples[-1]) | (threshold_temp < 0)):
                 index_temp = np.where(y_upper > threshold_temp)[0]
             else:
-                threshold_temp = 0
-                index_temp = np.where(y_upper > threshold_temp)[0]
+                threshold = 0
+                index_temp = np.where(y_upper > threshold)[0]
         else: 
             cond1 = ((y_hat.flatten() + 1.96 * y_std) < threshold)
             cond2 = ((y_hat.flatten() - 1.96 * y_std) > -threshold)
             index_temp = np.where(cond1 & cond2)[0]
         
-        return index_temp, threshold_temp
+        return index_temp, threshold
         # END filter_samples  
     
     y_temp, y_temp_std = gp.predict(sampler.candidate_samples.T, return_std=True)
     y_temp_upper =  y_temp.flatten() + 1.96 * y_temp_std
-    if np.sort(y_temp_upper, axis=0)[-100] > 0:
+    # if sampler.candidate_samples.shape[1] > 1000:
+    if np.sort(y_temp_upper, axis=0)[-200] > 0:
         index_temp = np.where(y_temp_upper > 0)[0]
     else:
         index_temp = np.where(y_temp_upper > np.sort(y_temp_upper, axis=0)[-100])[0]
-        
+
     x_select = sampler.candidate_samples[:, index_temp]
     
     x_max = x_select.max(axis=1)
@@ -239,7 +223,6 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
 
     return new_candidates_select, thsd_dict[objective]
 
-
 def convergence_study(kernel, function, sampler,
                       num_vars, generate_samples, num_new_samples,
                       update_kernel_scale_num_samples,
@@ -262,16 +245,16 @@ def convergence_study(kernel, function, sampler,
     
     if gp_kernel_ob1 is not None:
         gp_ob1 =  AdaptiveGaussianProcess(
-        gp_kernel_ob1, n_restarts_optimizer=4, alpha=1e-12)
+        gp_kernel_ob1, n_restarts_optimizer=2, alpha=1e-12)
         gp_ob1.optimizer = "fmin_l_bfgs_b"
     
     if gp_kernel_ob2 is not None:
         gp_ob2 =  AdaptiveGaussianProcess(
-        gp_kernel_ob2, n_restarts_optimizer=4, alpha=1e-12)
+        gp_kernel_ob2, n_restarts_optimizer=2, alpha=1e-12)
         gp_ob2.optimizer = "fmin_l_bfgs_b"
 
     gp = AdaptiveGaussianProcess(
-        gp_kernel, n_restarts_optimizer=4, alpha=1e-12)
+        gp_kernel, n_restarts_optimizer=2, alpha=1e-12)
     gp.setup(function, sampler)
     if hasattr(sampler, "set_gaussian_process"):
         sampler.set_gaussian_process(gp)
@@ -387,6 +370,7 @@ def unnormalized_posterior(gp, prior_pdf, samples, temper_param=1):
     prior_vals = prior_pdf(samples).squeeze()
     gp_vals = gp.predict(samples.T).squeeze()
     vals_max = max(gp_vals.max(), 0.1)
+    # breakpoint()
     # unnormalized_posterior_vals = prior_vals*(1 / (1 - gp_vals))**temper_param
     unnormalized_posterior_vals = prior_vals*np.exp(-(1 - gp_vals / vals_max))**temper_param
     return unnormalized_posterior_vals
@@ -411,10 +395,8 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
     def set_gaussian_process(self, gp):
         self.gp = gp
 
-    # Qian: understand the purpose of function increment_temper_param()
     def increment_temper_param(self, num_training_samples):
 
-        # samples = np.random.uniform(0, 1, (self.nvars, 1000))
         samples = generate_independent_random_samples(self.variables, 1000)
         density_vals_prev = self.weight_function(samples)
 
@@ -433,10 +415,9 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
             obj = ratio.std()/ratio.mean()
             return obj
         print('temper parameter', self.temper_param)
-        x0 = self.temper_param+1e-4
+        x0 = self.temper_param+1e-3
         # result = root(lambda b: objective(b)-1, x0)
         # x_opt = result.x
-        # breakpoint()
         
         x_opt = bisect(lambda b: objective(b)-1, x0, 1)
         # if not optimize temper_param
@@ -487,7 +468,7 @@ def bayesian_inference_example():
     init_scale = 0.2# used to define length_scale for the kernel
     num_vars = variables.nvars
     num_candidate_samples = 20000
-    num_new_samples = np.asarray([20]+[10]*8+[16]*20+[24]*10+[40]*6)
+    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[20]*16)
 
     nvalidation_samples = 10000
 
@@ -517,7 +498,7 @@ def bayesian_inference_example():
 
     # defining kernel
     length_scale = [init_scale, init_scale, *(3*np.ones(num_vars -2, dtype=float))]
-    kernel = RBF(length_scale, [(5e-2, 3), (5e-2, 3), (5e-2, 20), (5e-2, 10),
+    kernel = RBF(length_scale, [(5e-2, 1), (5e-2, 1), (5e-2, 20), (5e-2, 10),
         (5e-2, 20), (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20), 
         (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20)])
 
