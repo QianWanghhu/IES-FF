@@ -12,3 +12,9 @@ src/pest_source/
 output/
 
 src/John_bayes_cholesky/
+
+src/.vscode/
+
+src/gp_weights_map.pdf
+
+src/gp_weights_map.png
