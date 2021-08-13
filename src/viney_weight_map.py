@@ -1,13 +1,7 @@
 #!/usr/bin/env python
 from multiprocessing import Pool
 import numpy as np
-import os
 import matplotlib.pyplot as plt
-from functools import partial
-import time
-import copy
-import pandas as pd
-
 import matplotlib as mpl
 
 
@@ -15,7 +9,7 @@ mpl.rcParams['font.size'] = 16
 mpl.rcParams['lines.linewidth'] = 3
 mpl.rcParams['text.usetex'] = False  # use latex for all text handling
 mpl.rcParams['savefig.bbox'] = 'tight'
-mpl.rcParams['savefig.format'] = 'pdf'  # gives best resolution plots
+mpl.rcParams['savefig.format'] = 'png'  # gives best resolution plots
 mpl.rcParams['axes.labelsize'] = 20
 mpl.rcParams['axes.titlesize'] = 20
 mpl.rcParams['xtick.labelsize'] = 20
@@ -43,9 +37,9 @@ for ii in range(len(temper_parameter)):
         gp_vals = np.linspace(-100, vals_max[jj], 10000)
         weights = calculate_weight(prior_vals, gp_vals, vals_max[jj], temper_parameter[ii])
         axes[ii].semilogx((1 - gp_vals), weights, alpha=0.7)
-    axes[ii].set_xlabel('1 - (GP_vals)')
+    axes[ii].set_xlabel('1 - (GP outputs)')
     axes[ii].set_title(f'temper param: {temper_parameter[ii]}')
 
 axes[0].legend(legends)
 axes[0].set_ylabel('Weights')
-plt.savefig('gp_weights_map.pdf', dpi=300)
+plt.savefig('gp_weights_map.png', dpi=300)
