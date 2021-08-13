@@ -52,16 +52,16 @@ mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
 # Create the copy of models and veneer list
-project_name = 'MW_BASE_RC10.rsproj'
-veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-first_port=15000; num_copies = 8
-_, things_to_record, _, _, _ = modeling_settings()
-processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
+# project_name = 'MW_BASE_RC10.rsproj'
+# veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
+# first_port=15000; num_copies = 8
+# _, things_to_record, _, _, _ = modeling_settings()
+# processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
 
-vs_list = vs_settings(ports, things_to_record)
-# obtain the initial values of parameters 
-initial_values = obtain_initials(vs_list[0])
-
+# vs_list = vs_settings(ports, things_to_record)
+# # obtain the initial values of parameters 
+# initial_values = obtain_initials(vs_list[0])
+vs_list = []
 def run_source_lsq(vars, vs_list=vs_list):
     """
     Script used to run_source and return the output file.
@@ -357,7 +357,7 @@ def convergence_study(kernel, function, sampler,
                 print('----case 1-----')
                 thsd = [0.382, 0.0, 1]
                 resample_flag = True
-            elif (errors[sample_step - 2] > 0.2) | (errors[sample_step-3] > 0.2):
+            elif (errors[sample_step - 2] > 0.4) | (errors[sample_step-3] > 0.4):
                 print('----case 2-----')
                 resample_flag = False
             else:
@@ -369,15 +369,15 @@ def convergence_study(kernel, function, sampler,
             print(f'--------Error of step {sample_step - 3}: {errors[sample_step - 3]}')
 
             y_training = gp.y_train_
-            num_y_optimize = y_training[y_training >= 0.382].shape[0]
+            num_y_optimize = y_training[y_training >= 0].shape[0]
 
-            if resample_flag & (num_y_optimize <= 20):
+            if resample_flag & (num_y_optimize <= 10):
                 new_candidates, thsd_viney = resample_candidate(gp, sampler, thsd, 
                     num_samples, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
 
                 sampler.candidate_samples = new_candidates
                 # sampler.init_pivots = None
-
+                print('----------Update candidate set')
                 print(f'---------Threhsolds used to constrain parameter ranges:')
                 print(f' viney_F: {thsd_viney}')
                 print(f'---------The size of new candidate samples is {new_candidates.shape[1]}')
@@ -424,7 +424,7 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
     def increment_temper_param(self, num_training_samples):
 
         # samples = np.random.uniform(0, 1, (self.nvars, 1000))
-        samples = generate_independent_random_samples(self.variables, 1000)
+        samples = generate_independent_random_samples(self.variables, 2000)
         density_vals_prev = self.weight_function(samples)
 
         def objective(beta):
@@ -442,7 +442,7 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
             obj = ratio.std()/ratio.mean()
             return obj
         print('temper parameter', self.temper_param)
-        x0 = self.temper_param+1e-4
+        x0 = self.temper_param + 1e-3
         # result = root(lambda b: objective(b)-1, x0)
         # x_opt = result.x
         # breakpoint()
@@ -493,10 +493,10 @@ def bayesian_inference_example():
     # variables = None
     ind_vars, variables = variables_prep(param_file, product_uniform='uniform', dummy=False)
     var_trans = AffineRandomVariableTransformation(variables, enforce_bounds=True)
-    init_scale = 0.2# used to define length_scale for the kernel
+    init_scale = 0.2 # used to define length_scale for the kernel
     num_vars = variables.nvars
-    num_candidate_samples = 20000
-    num_new_samples = np.asarray([20]+[10]*8+[16]*20+[24]*10+[40]*6)
+    num_candidate_samples = 2000
+    num_new_samples = np.asarray([20]+[8]*10+[16]*20+[24]*16+[40]*14)
 
     nvalidation_samples = 10000
 
@@ -613,11 +613,12 @@ def bayesian_inference_example():
     axs[0].legend()
     plt.savefig(figname) 
 
-if __name__ == '__main__':
-    try:
-        import sklearn
-    except:
-        msg = 'Install sklearn using pip install sklearn'
-        raise Exception(msg)
+# if __name__ == '__main__':
+#     try:
+#         import sklearn
+#     except:
+#         msg = 'Install sklearn using pip install sklearn'
+#         raise Exception(msg)
 
-    bayesian_inference_example()
+#     bayesian_inference_example()
+
