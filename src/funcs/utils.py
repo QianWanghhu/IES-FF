@@ -59,11 +59,12 @@ def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, y_lab='SSE', orig_x
             ax = sns.scatterplot(x=orig_x_opt[ii, :], y=orig_y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='g', s=20, alpha=0.3)
             
         ax = sns.scatterplot(x=x_samples[ii, :], y=y_vals.flatten(), ax=axes[ii // 4, ii % 4], s=20, alpha=0.7)
-        # ax = sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='r', s=20)
+        ax = sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='orange', s=20, alpha=0.5)
                    
         ax.set_title(param_names[ii])
+        ax.set_ylim(-2.5, 4)
         if ii % 4 == 0: ax.set_ylabel(y_lab)
-            
+
     return fig
 
 
@@ -81,7 +82,7 @@ def define_constants(x, stats = 'median'):
     if stats == 'median':
         x_default = np.median(x, axis=1)
     elif stats == 'mean':
-        x_defau;t = x.mean()
+        x_default = x.mean()
     else:
         AssertionError
     return x_default
