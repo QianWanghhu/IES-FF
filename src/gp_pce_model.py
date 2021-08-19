@@ -18,7 +18,7 @@ from sklearn.gaussian_process.kernels import RBF, \
     Matern
 
 from pyapprox.density import tensor_product_pdf
-from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_candidate_samples
+from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_gp_candidate_samples
 from pyapprox.low_discrepancy_sequences import transformed_halton_sequence
 from pyapprox.utilities import compute_f_divergence, \
     get_tensor_product_quadrature_rule
@@ -129,8 +129,8 @@ def run_source_lsq(vars, vs_list=vs_list):
     
     # loop over the vars and try to use parallel     
     parameter_df = pd.DataFrame(index=np.arange(vars.shape[1]), columns=parameters.Name_short)
-    for i in range(vars.shape[1]):
-        parameter_df.iloc[i] = vars[:, i]
+    for i in range(vars_copy.shape[1]):
+        parameter_df.iloc[i] = vars_copy[:, i]
 
     # set the time period of the results
     retrieve_time = [pd.Timestamp('2009-07-01'), pd.Timestamp('2018-06-30')]
@@ -622,3 +622,7 @@ def bayesian_inference_example():
 
 #     bayesian_inference_example()
 
+# fpath = '../output/gp_run_0813/'
+# gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
+# x_training = gp.X_train_
+# y_training = gp.y_train_
