@@ -57,7 +57,7 @@ vs_list = []
 def run_source_annual(vars, vs_list):
     pass
 
-pce_names = [f'../output/pce-{i}-level4.pkl' for i in range(2009, 2018)]
+pce_names = [f'../output/old_pce/pce-{i}-level4.pkl' for i in range(2009, 2018)]
 pce_list = []
 for fn in pce_names:
     pce_list.append(pickle.load(open(fn, "rb")))
@@ -161,6 +161,7 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
         """
         # check whether to return the standard deviation for the uncertainty
         if return_std: 
+            breakpoint()
             y_hat, y_std = gp_surrogate.predict(samples.T, return_std)
         else:
             y_hat = gp_surrogate.predict(samples.T, return_std)
