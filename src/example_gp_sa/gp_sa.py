@@ -31,6 +31,7 @@ from pyapprox.variable_transformations import AffineRandomVariableTransformation
 import matplotlib as mpl
 from matplotlib import rc
 import spotpy as sp
+from pyapprox.benchmarks.benchmarks import setup_benchmark
 
 mpl.rcParams['font.size'] = 16
 mpl.rcParams['lines.linewidth'] = 3
@@ -46,8 +47,6 @@ mpl.rcParams['legend.fontsize'] = 16
 mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
-from pyapprox.benchmarks.benchmarks import setup_benchmark
-benchmark=setup_benchmark('ishigami', a=7, b=0.05)
 
 def obj_cal(vars, fun_call):
     y_hat = fun_call(vars)
@@ -132,9 +131,8 @@ def convergence_study(kernel, function, sampler,
 
             print('N', sampler.ntraining_samples, 'Error', error_gp_comp)
 
-            if sample_step >= 1:
-                errors[sample_step] = error_gp_comp
-                nsamples[sample_step] = num_samples[sample_step]
+            errors[sample_step] = error_gp_comp
+            nsamples[sample_step] = num_samples[sample_step]
 
             sample_step += 1            
 
@@ -145,7 +143,7 @@ def convergence_study(kernel, function, sampler,
             break
 
     if return_samples:
-        return errors, nsamples, sampler.training_samples[:, 0:num_samples[sample_step - 1]]
+        return errors, nsamples, sampler.training_samples
 
     return errors, nsamples
 
@@ -266,12 +264,13 @@ def get_posterior_samples(num_vars, weight_function, nsamples):
 
 def bayesian_inference_example():
     # read parameter distributions
+    benchmark=setup_benchmark('ishigami', a=7, b=0.05)
 
     variables = benchmark.variable
     init_scale = 1 # used to define length_scale for the kernel
     num_vars = variables.nvars
     num_candidate_samples = 10000
-    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[50]*4)
+    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[50]*6)
 
     nvalidation_samples = 10000
 
@@ -358,11 +357,12 @@ def bayesian_inference_example():
             methods, labels, styles, fixed_scales):
         filename = get_filename(method, fixed_scale)
         data = np.load(filename)
-        nsamples, errors = data['nsamples'][:-1], data['errors'][:-1]
-        temper_params, cond_nums = data['temper_params'][1:-1], data['cond_nums'][:-1]
+        nsamples, errors = data['nsamples'], data['errors']
+        temper_params, cond_nums = data['temper_params'], data['cond_nums']
+        # breakpoint()
         axs[0].loglog(nsamples, errors, ls=ls, label=label)
         axs[1].loglog(nsamples, cond_nums, ls=ls, label=label)
-        axs[2].semilogy(np.arange(1, nsamples.shape[0]),
+        axs[2].semilogy(np.arange(nsamples.shape[0]),
                     temper_params, 'k-o')
         axs[2].set_xlabel(r'$\mathrm{Iteration}$ $j$')
         axs[2].set_ylabel(r'$\beta_j$')
@@ -382,6 +382,24 @@ def bayesian_inference_example():
     axs[0].legend()
     plt.savefig(figname) 
 
+    def analytic_gp_sobol():
+        print('----------Conduct sensitivity analysis with GP.-----------')
+        gp = pickle.load(open('gp.pkl', 'rb'))
+        order = 2
+        interaction_terms = pyapprox.compute_hyperbolic_indices(benchmark.variable.nvars, order)
+        interaction_terms = interaction_terms[:, np.where(
+        interaction_terms.max(axis=0) == 1)[0]]
+        sa = pyapprox.analytic_sobol_indices_from_gaussian_process(gp, benchmark.variable, 
+            interaction_terms, ngp_realizations=100, ninterpolation_samples=500, 
+                use_cholesky=True, ncandidate_samples=10000, nvalidation_samples=200)
+
+        np.savetxt('ST_Ishigami.txt', sa['total_effects']['values'])
+    # END analytic_gp_sobol
+
+    # call analytic_gp_sobol()
+    analytic_gp_sobol()
+
+
 if __name__ == '__main__':
     try:
         import sklearn
@@ -390,3 +408,4 @@ if __name__ == '__main__':
         raise Exception(msg)
 
     bayesian_inference_example()
+
