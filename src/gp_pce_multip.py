@@ -57,7 +57,7 @@ vs_list = []
 def run_source_annual(vars, vs_list):
     pass
 
-pce_names = [f'../output/old_pce/pce-{i}-level4.pkl' for i in range(2009, 2018)]
+pce_names = [f'../output/pce-{i}-level4.pkl' for i in range(2009, 2018)]
 pce_list = []
 for fn in pce_names:
     pce_list.append(pickle.load(open(fn, "rb")))
@@ -161,7 +161,6 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
         """
         # check whether to return the standard deviation for the uncertainty
         if return_std: 
-            breakpoint()
             y_hat, y_std = gp_surrogate.predict(samples.T, return_std)
         else:
             y_hat = gp_surrogate.predict(samples.T, return_std)
@@ -170,10 +169,11 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
         
         # if the objective function is PBIAS, use both the upper bound and lower bound to constrain
         if obj != 'pbias':
-            # breakpoint()
-            y_upper = y_hat.flatten() + 1.96 * y_std
+            # y_upper = y_hat.flatten() + 1.96 * y_std
+            y_upper = y_hat
             index_temp = np.where(y_upper > threshold)[0]
             threshold_temp = np.sort(y_upper, axis=0)[-(num_candidates - gp_surrogate.y_train_.shape[0] + 1)]
+            # threshold_temp = np.sort(y_upper, axis=0)[-801]
             if ((index_temp.shape[0] < num_samples[-1]) | (threshold_temp < 0)):
                 index_temp = np.where(y_upper > threshold_temp)[0]
             else:
@@ -188,7 +188,8 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
         # END filter_samples  
     
     y_temp, y_temp_std = gp.predict(sampler.candidate_samples.T, return_std=True)
-    y_temp_upper =  y_temp.flatten() + 1.96 * y_temp_std
+    # y_temp_upper =  y_temp.flatten() + 1.96 * y_temp_std
+    y_temp_upper = y_temp
     # if sampler.candidate_samples.shape[1] > 1000:
     if np.sort(y_temp_upper, axis=0)[-200] > 0:
         index_temp = np.where(y_temp_upper > 0)[0]
@@ -218,15 +219,13 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
         index_satis[objective], thsd_dict[objective] = filter_samples(gp_model, 
             sampler.candidate_samples.shape[1], new_candidates, 
                 threshold, num_samples, return_std=True, obj = objective)
-    # breakpoint()
     # find the common index filtered by the three constraints
     # index_intersect = np.intersect1d(index_satis[obj_list[0]], index_satis[obj_list[1]])
     # index_intersect = np.intersect1d(index_intersect, index_satis[obj_list[2]])
     all_pivots = np.arange(sampler.candidate_samples.shape[1])
-    new_candidates_select = new_candidates[:, index_satis[obj_list[0]]]
-    # breakpoint()        
+    new_candidates_select = new_candidates[:, index_satis[obj_list[0]]]      
     sampler.candidate_samples[:, np.delete(all_pivots, sampler.init_pivots)] = new_candidates_select
-
+    # sampler.candidate_samples = new_candidates_select
     return sampler.candidate_samples, thsd_dict[objective]
 
 def convergence_study(kernel, function, sampler,
@@ -277,6 +276,7 @@ def convergence_study(kernel, function, sampler,
     sample_step = 0
     optimizer_step = 0
     # breakpoint()
+    re_candidate_flag = False
     while sample_step < num_steps:
         if hasattr(gp, 'kernel_'):
             # if using const * rbf + noise kernel
@@ -295,8 +295,17 @@ def convergence_study(kernel, function, sampler,
         else:
             gp.optimizer = "fmin_l_bfgs_b"
             optimizer_step += 1
-        
+
+        # if re_candidate_flag:
+        #     sampler.ntraining_samples = 0
+        #     sampler.training_samples = np.array([[]]*13)
+        #     flag = gp.refine(num_new_samples[sample_step])
+        #     # breakpoint()
+        #     sampler.ntraining_samples = gp.y_train_.shape[0]
+        #     sampler.training_samples = copy.deepcopy(gp.X_train_.T)
+        # else:
         flag = gp.refine(np.sum(num_new_samples[:sample_step+1]))
+        
 
         # load the taining samples for NSE and PBIAS
         # train_samples_other = np.loadtxt('training_samples.txt')
@@ -352,14 +361,18 @@ def convergence_study(kernel, function, sampler,
             print(f'--------Error of step {sample_step - 3}: {errors[sample_step - 3]}')
 
             y_training = gp.y_train_
-            num_y_optimize = y_training[y_training >= 0.382].shape[0]
+            num_y_optimize = y_training[y_training >= 0].shape[0]
+            print(f'num of y > 0: {num_y_optimize}')
 
-            if resample_flag & (num_y_optimize <= 20):
+            
+            if (resample_flag & (num_y_optimize <= 10)):
                 new_candidates, thsd_viney = resample_candidate(gp, sampler, thsd, 
                     num_samples, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
 
                 sampler.candidate_samples = new_candidates
                 # sampler.init_pivots = None
+                # re_candidate_flag = True
+
 
                 print(f'---------Threhsolds used to constrain parameter ranges:')
                 print(f' viney_F: {thsd_viney}')
@@ -406,7 +419,7 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
 
     def increment_temper_param(self, num_training_samples):
 
-        samples = generate_independent_random_samples(self.variables, 1000)
+        samples = generate_independent_random_samples(self.variables, 2000)
         density_vals_prev = self.weight_function(samples)
 
         def objective(beta):
@@ -424,7 +437,7 @@ class BayesianInferenceCholeskySampler(CholeskySampler):
             obj = ratio.std()/ratio.mean()
             return obj
         print('temper parameter', self.temper_param)
-        x0 = self.temper_param+1e-3
+        x0 = self.temper_param+1e-4
         # result = root(lambda b: objective(b)-1, x0)
         # x_opt = result.x
         
@@ -474,10 +487,10 @@ def bayesian_inference_example():
     # variables = None
     ind_vars, variables = variables_prep(param_file, product_uniform='uniform', dummy=False)
     var_trans = AffineRandomVariableTransformation(variables, enforce_bounds=True)
-    init_scale = 0.2# used to define length_scale for the kernel
+    init_scale = 0.5 # used to define length_scale for the kernel
     num_vars = variables.nvars
-    num_candidate_samples = 20000
-    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[20]*10)
+    num_candidate_samples = 2000
+    num_new_samples = np.asarray([20]+[8]*10+[16]*20+[24]*16+[40]*13)
 
     nvalidation_samples = 10000
 
@@ -506,7 +519,7 @@ def bayesian_inference_example():
 
     # defining kernel
     length_scale = [init_scale, init_scale, *(3*np.ones(num_vars -2, dtype=float))]
-    kernel = RBF(length_scale, [(5e-2, 1), (5e-2, 1), (5e-2, 20), (5e-2, 10),
+    kernel = RBF(length_scale, [(5e-2, 3), (5e-2, 3), (5e-2, 20), (5e-2, 10),
         (5e-2, 20), (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20), 
         (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20)])
 
@@ -601,7 +614,3 @@ if __name__ == '__main__':
         raise Exception(msg)
 
     bayesian_inference_example()
-
-# gp_load = pickle.load(open(f'gp_0.pkl', "rb"))
-# x_training = gp_load.X_train_
-# y_training = gp_load.y_train_
