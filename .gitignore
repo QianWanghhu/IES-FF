@@ -18,3 +18,11 @@ src/.vscode/
 src/gp_weights_map.pdf
 
 src/gp_weights_map.png
+
+src/example_gp_sa/bayes-example-Learning-Weighted-Cholesky-b-d-3-n-10000-opt.npz
+
+src/example_gp_sa/bayes_example_comparison_3.pdf
+
+src/example_gp_sa/example_gp_sa.zip
+
+src/example_gp_sa/ST_Ishigami.txt
