@@ -148,7 +148,7 @@ def fix_plot(gp, variable_temp):
                                                                                                                                                                                                                                                                                                                                                     
         # plot     
         fig = dotty_plot(samples_fix, np.log((1-vals_fix).flatten()), 
-            samples_opt_fix, np.log((1-vals_opt_fix).flatten()), param_names, 'Viney F', orig_x_opt=dot_samples, orig_y_opt=np.log((1-dot_vals).flatten()));
+            samples_opt_fix, np.log((1-vals_opt_fix).flatten()), param_names, 'ln(1 - Viney_F)', orig_x_opt=dot_samples, orig_y_opt=np.log((1-dot_vals).flatten()));
         plt.savefig(f'{fpath}/{len(index_fix)}.png', dpi=300)
 
     # PDF plot
@@ -160,7 +160,7 @@ def fix_plot(gp, variable_temp):
         k += 1
 
     axes[0].legend(['Uncond', *list(vals_dict.keys())[0:4]])
-    axes[1].set_xlabel('Viney F')
+    axes[1].set_xlabel('ln(1 - Viney_F)')
     axes[1].set_ylabel('')
     axes[1].legend(list(vals_dict.keys())[4:8])
     axes[2].legend(list(vals_dict.keys())[8:])
