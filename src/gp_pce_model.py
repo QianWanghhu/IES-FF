@@ -18,7 +18,7 @@ from sklearn.gaussian_process.kernels import RBF, \
     Matern
 
 from pyapprox.density import tensor_product_pdf
-from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_gp_candidate_samples
+from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_candidate_samples
 from pyapprox.low_discrepancy_sequences import transformed_halton_sequence
 from pyapprox.utilities import compute_f_divergence, \
     get_tensor_product_quadrature_rule
@@ -52,16 +52,16 @@ mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
 # Create the copy of models and veneer list
-# project_name = 'MW_BASE_RC10.rsproj'
-# veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-# first_port=15000; num_copies = 8
-# _, things_to_record, _, _, _ = modeling_settings()
-# processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
+project_name = 'MW_BASE_RC10.rsproj'
+veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
+first_port=15000; num_copies = 8
+_, things_to_record, _, _, _ = modeling_settings()
+processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
 
-# vs_list = vs_settings(ports, things_to_record)
-# # obtain the initial values of parameters 
-# initial_values = obtain_initials(vs_list[0])
-vs_list = []
+vs_list = vs_settings(ports, things_to_record)
+# obtain the initial values of parameters 
+initial_values = obtain_initials(vs_list[0])
+# vs_list = []
 def run_source_lsq(vars, vs_list=vs_list):
     """
     Script used to run_source and return the output file.
@@ -118,8 +118,8 @@ def run_source_lsq(vars, vs_list=vs_list):
     
     # rescale samples to the absolute range
     vars_copy = copy.deepcopy(vars)
-    vars_copy[0, :] = vars_copy[0, :] * 100
-    vars_copy[1, :] = vars_copy[1, :] * 100
+    # vars_copy[0, :] = vars_copy[0, :] * 100
+    # vars_copy[1, :] = vars_copy[1, :] * 100
 
     # import observation if the output.txt requires the use of obs.
     date_range = pd.to_datetime(['2009/07/01', '2018/06/30'])
@@ -357,7 +357,7 @@ def convergence_study(kernel, function, sampler,
                 print('----case 1-----')
                 thsd = [0.382, 0.0, 1]
                 resample_flag = True
-            elif (errors[sample_step - 2] > 0.4) | (errors[sample_step-3] > 0.4):
+            elif (errors[sample_step - 2] > 0.5) | (errors[sample_step-3] > 0.5):
                 print('----case 2-----')
                 resample_flag = False
             else:
@@ -493,7 +493,7 @@ def bayesian_inference_example():
     # variables = None
     ind_vars, variables = variables_prep(param_file, product_uniform='uniform', dummy=False)
     var_trans = AffineRandomVariableTransformation(variables, enforce_bounds=True)
-    init_scale = 0.2 # used to define length_scale for the kernel
+    init_scale = 50 # used to define length_scale for the kernel
     num_vars = variables.nvars
     num_candidate_samples = 2000
     num_new_samples = np.asarray([20]+[8]*10+[16]*20+[24]*16+[40]*14)
@@ -526,12 +526,12 @@ def bayesian_inference_example():
 
     # defining kernel
     length_scale = [init_scale, init_scale, *(3*np.ones(num_vars -2, dtype=float))]
-    kernel = RBF(length_scale, [(5e-2, 3), (5e-2, 3), (5e-2, 20), (5e-2, 10),
+    kernel = RBF(length_scale, [(5e-2, 200), (5e-2, 100), (5e-2, 20), (5e-2, 10),
         (5e-2, 20), (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20), 
         (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20)])
 
     # define gp_kernel_ob1/ob2 for objective functions individually
-    gp_kernel_ob1 = RBF(length_scale, [(5e-2, 1), (5e-2, 1), (5e-2, 20), (5e-2, 10),
+    gp_kernel_ob1 = RBF(length_scale, [(5e-2, 100), (5e-2, 100), (5e-2, 20), (5e-2, 10),
         (5e-2, 20), (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20), 
         (5e-2, 10), (5e-2, 20), (5e-2, 10), (5e-2, 20)])
 
@@ -613,16 +613,12 @@ def bayesian_inference_example():
     axs[0].legend()
     plt.savefig(figname) 
 
-# if __name__ == '__main__':
-#     try:
-#         import sklearn
-#     except:
-#         msg = 'Install sklearn using pip install sklearn'
-#         raise Exception(msg)
+if __name__ == '__main__':
+    try:
+        import sklearn
+    except:
+        msg = 'Install sklearn using pip install sklearn'
+        raise Exception(msg)
 
-#     bayesian_inference_example()
+    bayesian_inference_example()
 
-# fpath = '../output/gp_run_0813/'
-# gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
-# x_training = gp.X_train_
-# y_training = gp.y_train_
