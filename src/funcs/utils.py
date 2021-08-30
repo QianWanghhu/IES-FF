@@ -53,16 +53,16 @@ def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, y_lab='SSE', orig_x
     ========
     fig
     """
-    fig, axes = plt.subplots(4, 4, figsize = (18, 18), sharey=True)
+    fig, axes = plt.subplots(4, 4, figsize = (20, 20), sharey=True)
     for ii in range(x_samples.shape[0]): 
         if orig_x_opt is not None:
-            ax = sns.scatterplot(x=orig_x_opt[ii, :], y=orig_y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='g', s=20, alpha=0.3)
+            ax = sns.scatterplot(x=orig_x_opt[ii, :], y=orig_y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='g', s=20, alpha=0.8)
             
-        ax = sns.scatterplot(x=x_samples[ii, :], y=y_vals.flatten(), ax=axes[ii // 4, ii % 4], s=20, alpha=0.7)
+        ax = sns.scatterplot(x=x_samples[ii, :], y=y_vals.flatten(), ax=axes[ii // 4, ii % 4], s=20, alpha=0.5)
         ax = sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[ii // 4, ii % 4], color='orange', s=20, alpha=0.5)
                    
-        ax.set_title(param_names[ii])
-        ax.set_ylim(-2.5, 4)
+        ax.set_xlabel(param_names[ii])
+        # ax.set_ylim(-2.5, 4)
         if ii % 4 == 0: ax.set_ylabel(y_lab)
 
     return fig
