@@ -71,17 +71,18 @@ def fix_plot(gp, variable_temp):
     from funcs.utils import dotty_plot, define_constants, fix_sample_set
     dot_fn = f'{file_settings()[0]}gp_run_0816/dotty_samples.txt'
     if not os.path.exists(dot_fn):
-        dot_samples = generate_independent_random_samples(variable_temp, 100000)
+        dot_samples = generate_independent_random_samples(variable_temp, 1000000)
         np.savetxt(dot_fn, dot_samples)
     else:
         dot_samples = np.loadtxt(dot_fn)
     dot_vals = np.zeros(shape=(dot_samples.shape[1], 1))
-    for ii in range(10):
+    for ii in range(100):
         dot_vals[10000*ii:(ii+1)*10000] = gp.predict(dot_samples[:, 10000*ii:(ii+1)*10000].T)
-    # dot_samples = dot_samples[:, np.where(dot_vals > 0)[0]]
-    # dot_vals = dot_vals[dot_vals>0]
+    # dot_samples = dot_samples[:, np.where(dot_vals >= 0.382)[0]]
+    # dot_vals = dot_vals[dot_vals>=0.382]
     samples_opt = dot_samples[:, np.where(dot_vals>=0.382)[0]]
     vals_opt = dot_vals[dot_vals>=0.382]
+    breakpoint()
     print(f'Number of values beyond the threshold: {samples_opt.shape[0]}')
     x_default = define_constants(dot_samples, stats = 'median')
     num_opt = []
@@ -93,22 +94,22 @@ def fix_plot(gp, variable_temp):
         index_fix = np.append(index_fix, index_sort[ii])
         print(f'Fix {index_fix.shape[0]} parameters')
         print(f'index: {index_fix}')
-        samples_fix = fix_sample_set(index_fix, dot_samples, x_default)
-        vals_fix = np.zeros_like(dot_vals)
+        samples_fix = fix_sample_set(index_fix, samples_opt, x_default)
+        vals_fix = np.zeros_like(vals_opt)
         # calculate with surrogate 
         vals_fix = gp.predict(samples_fix.T)
-        for ii in range(10):
-            vals_fix[10000*ii:(ii+1)*10000] = gp.predict(samples_fix[:, 10000*ii:(ii+1)*10000].T)
+        # for ii in range(100):
+        #     vals_fix[10000*ii:(ii+1)*10000] = gp.predict(samples_fix[:, 10000*ii:(ii+1)*10000].T)
                     
         # select points statisfying the optima
         index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
         samples_opt_fix = samples_fix[:, index_opt_fix]
         vals_opt_fix = vals_fix[index_opt_fix]
-        vals_dict[f'fix_{len(index_fix)}'] = vals_opt_fix
+        vals_dict[f'fix_{len(index_fix)}'] = vals_fix
                                                                                                                                                                                                                                                                                                                                                     
         # plot     
-        fig = dotty_plot(samples_opt, vals_opt.flatten(), 
-            samples_opt_fix,vals_opt_fix.flatten(), param_names, 'Viney_F');
+        fig = dotty_plot(samples_opt, vals_opt.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
+            param_names, 'Viney_F', orig_x_opt=samples_fix, orig_y_opt=vals_fix);
         plt.savefig(f'{fpath}/fix_median_full/{len(index_fix)}.png', dpi=300)
         # calculate the ratio of optimal values
         pct_optimal[f'fix_{len(index_fix)}'] = vals_opt_fix.shape[0] / dot_vals.shape[0]
@@ -118,7 +119,7 @@ def fix_plot(gp, variable_temp):
     pct_optimal.to_csv(f'{file_settings()[0]}gp_run_0816/fix_median_full/Proportion_optimal.csv')
     # PDF plot
     fig, axes = plt.subplots(1, 3, figsize=(20, 6), sharex=True)
-    sns.distplot(dot_vals.flatten(), hist=False,  ax=axes[0])
+    sns.distplot(vals_opt.flatten(), hist=False,  ax=axes[0])
     k = 0
     for key, value in vals_dict.items():
         sns.distplot(value.flatten(), hist=False, ax=axes[k//4]);
