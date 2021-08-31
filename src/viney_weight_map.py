@@ -38,8 +38,8 @@ for ii in range(len(temper_parameter)):
         weights = calculate_weight(prior_vals, gp_vals, vals_max[jj], temper_parameter[ii])
         axes[ii].semilogx((1 - gp_vals), weights, alpha=0.7)
     axes[ii].set_xlabel('1 - (GP outputs)')
-    axes[ii].set_title(f'temper param: {temper_parameter[ii]}')
+    axes[ii].set_title(r'$\beta: {%0.2f}$'%(temper_parameter[ii]))
 
 axes[0].legend(legends)
-axes[0].set_ylabel('Weights')
-plt.savefig('gp_weights_map.png', dpi=300)
+axes[0].set_ylabel(r'${w_{approx}}$')
+plt.savefig('../output/gp_weights_map.png', dpi=300)
