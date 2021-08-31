@@ -30,7 +30,7 @@ from pyapprox.variable_transformations import AffineRandomVariableTransformation
 
 import matplotlib as mpl
 from matplotlib import rc
-import spotpy as sp
+# import spotpy as sp
 from pyapprox.benchmarks.benchmarks import setup_benchmark
 
 mpl.rcParams['font.size'] = 16
@@ -94,6 +94,7 @@ def convergence_study(kernel, function, sampler,
     nsamples = np.empty(num_steps, dtype=int)
     sample_step = 0
     optimizer_step = 0
+    
     while sample_step < num_steps:
         if hasattr(gp, 'kernel_'):
             # if using const * rbf + noise kernel
@@ -143,7 +144,7 @@ def convergence_study(kernel, function, sampler,
             break
 
     if return_samples:
-        return errors, nsamples, sampler.training_samples
+        return errors, nsamples, sampler.training_samples, gp
 
     return errors, nsamples
 
@@ -270,7 +271,7 @@ def bayesian_inference_example():
     init_scale = 1 # used to define length_scale for the kernel
     num_vars = variables.nvars
     num_candidate_samples = 10000
-    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[50]*6)
+    num_new_samples = np.asarray([20]+[10]*6+[25]*6)#+[50]*6)
 
     nvalidation_samples = 10000
 
@@ -320,6 +321,7 @@ def bayesian_inference_example():
     labels = [r'$\mathrm{Adapted\;Weighted\;Cholesky}$']
     fixed_scales = [False]
 
+    gp = None
     for sampler, method, fixed_scale in zip(samplers, methods, fixed_scales):
         filename = get_filename(method, fixed_scale)
         print(filename)
@@ -340,7 +342,7 @@ def bayesian_inference_example():
                 temper_params.append(sampler.temper_param)
                 print(temper_params)
 
-        errors, nsamples, samples = convergence_study(
+        errors, nsamples, samples, gp = convergence_study(
             kernel, benchmark.fun, sampler, num_vars,
             generate_validation_samples, num_new_samples,
             update_kernel_scale_num_samples, callback=callback,
@@ -389,11 +391,15 @@ def bayesian_inference_example():
         interaction_terms = pyapprox.compute_hyperbolic_indices(benchmark.variable.nvars, order)
         interaction_terms = interaction_terms[:, np.where(
         interaction_terms.max(axis=0) == 1)[0]]
-        sa = pyapprox.analytic_sobol_indices_from_gaussian_process(gp, benchmark.variable, 
+        sa = pyapprox.analytic_sobol_indices_from_gaussian_process(
+            gp, benchmark.variable, 
             interaction_terms, ngp_realizations=100, ninterpolation_samples=500, 
-                use_cholesky=True, ncandidate_samples=10000, nvalidation_samples=200)
+            use_cholesky=True, ncandidate_samples=10000, nvalidation_samples=200,
+            stat_functions=(np.mean, np.std)
+        )
 
         np.savetxt('ST_Ishigami.txt', sa['total_effects']['values'])
+        print( sa['total_effects']['std'])
     # END analytic_gp_sobol
 
     # call analytic_gp_sobol()
