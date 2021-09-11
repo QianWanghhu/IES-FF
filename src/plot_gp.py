@@ -116,15 +116,30 @@ def fix_plot(gp, variable_temp, plot_range='full'):
         dot_vals[10000*ii:(ii+1)*10000] = gp.predict(dot_samples[:, 10000*ii:(ii+1)*10000].T)
     # dot_samples = dot_samples[:, np.where(dot_vals >= 0.382)[0]]
     # dot_vals = dot_vals[dot_vals>=0.382]
-    samples_opt = dot_samples[:, np.where(dot_vals>=0.382)[0]]
-    vals_opt = dot_vals[dot_vals>=0.382]
+    
+    samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
+    vals_opt = dot_vals[dot_vals>0.382]
     print(f'Number of values beyond the threshold: {samples_opt.shape[0]}')
-    if plot_range == 'full':
-        x_default = define_constants(dot_samples, stats = 'median')
+    if plot_range == 'full_median':
+        x_default = define_constants(dot_samples, 13, stats = np.median)
         fig_path = 'fix_median_full'
-    else:
-        x_default = define_constants(samples_opt, stats = 'median')
+    elif plot_range == 'sub_median':
+        x_default = define_constants(samples_opt, 13, stats = np.median)
         fig_path = 'fix_median_subreg'
+    elif plot_range == 'sub_mean':
+        x_default = define_constants(samples_opt, 13, stats = np.mean)
+        fig_path = 'fix_mean_subreg'
+    elif plot_range == 'sub_rand':
+        x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 10]
+        fig_path = 'fix_rand_subreg'
+    else:
+        AssertionError
+
+    y_default = gp.predict(x_default.reshape(x_default.shape[0], 1).T)[0]
+    print(f'F of the point with default values: {y_default}')
+    x_default = np.append(x_default, y_default)
+    np.savetxt(f'{fpath}/{fig_path}/fixed_values.txt', x_default)
+
     num_opt = []
     vals_dict = {}
     index_fix = np.array([], dtype=int)
@@ -145,12 +160,12 @@ def fix_plot(gp, variable_temp, plot_range='full'):
         index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
         samples_opt_fix = samples_fix[:, index_opt_fix]
         vals_opt_fix = vals_fix[index_opt_fix]
-        vals_dict[f'fix_{len(index_fix)}'] = vals_fix
+        vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()
                                                                                                                                                                                                                                                                                                                                                     
         # plot     
         fig = dotty_plot(samples_opt, vals_opt.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
             param_names, 'F', orig_x_opt=samples_fix, orig_y_opt=vals_fix);
-        # plt.savefig(f'{fpath}/{fig_path}/{len(index_fix)}.png', dpi=300)
+        plt.savefig(f'{fpath}/{fig_path}/{len(index_fix)}.png', dpi=300)
         # calculate the ratio of optimal values
         pct_optimal[f'fix_{len(index_fix)}'] = vals_opt_fix.shape[0] / dot_vals.shape[0]
     # # END For
@@ -162,8 +177,8 @@ def fix_plot(gp, variable_temp, plot_range='full'):
     sns.distplot(vals_opt.flatten(), hist=False,  ax=axes[0])
     k = 0
     df_stats = pd.DataFrame(columns=['mean', 'std', 'qlow','qup'])
-    df_stats.loc['uncond', ['mean', 'std']] = [vals_opt.mean(), vals_opt.std()]
-    df_stats.loc['uncond', 'qlow':'qup'] = np.quantile(vals_opt, [0.025, 0.957])
+    df_stats.loc['full_set', ['mean', 'std']] = [vals_opt.mean(), vals_opt.std()]
+    df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt, [0.025, 0.957])
     for key, value in vals_dict.items():
         sns.distplot(value.flatten(), hist=False, ax=axes[k//4]);
         df_stats.loc[key, 'mean'] = value.mean()
@@ -171,7 +186,7 @@ def fix_plot(gp, variable_temp, plot_range='full'):
         df_stats.loc[key, 'qlow':'qup'] = np.quantile(value, [0.025, 0.975])
         k += 1
 
-    axes[0].legend(['Uncond', *list(vals_dict.keys())[0:4]])
+    axes[0].legend(['full_set', *list(vals_dict.keys())[0:4]])
     axes[1].set_xlabel('F')
     axes[1].set_ylabel('')
     axes[1].legend(list(vals_dict.keys())[4:8])
@@ -179,8 +194,22 @@ def fix_plot(gp, variable_temp, plot_range='full'):
     axes[2].set_ylabel('')
     for ii in range(3):
         axes[ii].axvline(0.382,  color='grey', linestyle='--', alpha=0.7)
-    # plt.savefig(f'{fpath}/{fig_path}/objective_dist.png', dpi=300)
+    plt.savefig(f'{fpath}/{fig_path}/objective_dist.png', dpi=300)
+
+    # Box plot
+    # breakpoint()
+    fig2 = plt.figure(figsize=(8, 6))
+    df = pd.DataFrame.from_dict(vals_dict)
+    df['fix_0'] = vals_opt.flatten()
+    df.columns = [*np.arange(1, 13), 0]
+    df = df[np.arange(13)]
+    ax = sns.boxplot(data=df, saturation=0.5, linewidth=1, whis=0.5)
+    ax.axhline(0.382,  color='orange', linestyle='--', alpha=1 , linewidth=1)
+    ax.set_xlabel('Number of fixed parameters')
+    ax.set_ylabel('F')
+    plt.savefig(f'{fpath}{fig_path}/boxplot.png')
     df_stats.to_csv(f'{fpath}{fig_path}/F_stats.csv')
+# END fix_plot()
 
 
 # import GP
@@ -234,4 +263,4 @@ if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
 # Scatter plot and Pdf plot VS fixing parameters
-fix_plot(gp, variable_temp, plot_range='subreg')
+fix_plot(gp, variable_temp, plot_range='sub_rand')
