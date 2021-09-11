@@ -68,7 +68,7 @@ def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, y_lab='SSE', orig_x
     return fig
 
 
-def define_constants(x, stats = 'median'):
+def define_constants(x, num_vars, stats = np.median):
     """Return default values of the parameters to fix
     Parameters:
     ===========
@@ -79,10 +79,11 @@ def define_constants(x, stats = 'median'):
     Return:
     x_default: np.ndarray, of the shape (D, 1)
     """
+    assert x.shape[0] == num_vars, "Samples should be of two dimensions N*D where D is the number of parameters"
     if stats == 'median':
-        x_default = np.median(x, axis=1)
+        x_default = stats(x, axis=1)
     elif stats == 'mean':
-        x_default = x.mean()
+        x_default = stats(x, axis=1)
     else:
         AssertionError
     return x_default
