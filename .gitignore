@@ -26,3 +26,5 @@ src/example_gp_sa/bayes_example_comparison_3.pdf
 src/example_gp_sa/example_gp_sa.zip
 
 src/example_gp_sa/ST_Ishigami.txt
+
+*.cfg
