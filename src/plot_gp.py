@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
 import json
+import scipy
 import seaborn as sns
 
 from scipy import stats
@@ -48,18 +49,24 @@ def plot(gp, fpath, plot_range='full', save_vali=False):
         y_eval = y1_training[y_hat>0][0:100]
         y_hat = y_hat[y_hat>0][0:100]
 
-    np.linalg.norm(y_hat.flatten() - y_eval.flatten()) / np.linalg.norm(y_eval.flatten())
+    l2 = np.linalg.norm(y_hat.flatten() - y_eval.flatten()) / np.linalg.norm(y_eval.flatten())
+    r2 = 1 - l2 ** 2
+    rmse = np.linalg.norm(y_eval - y_eval.mean(), ord=2) / y_eval.shape[0] ** 0.5
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(y_eval.flatten(), y_hat.flatten(), linestyle='', marker='o', ms=8)
-    ax.set_xlabel('Modelled F')
-    ax.set_ylabel('GPR simulation')
+    ax.set_xlabel('Modeled F')
+    ax.set_ylabel('GP simulation')
     y_eval_opt = y_eval[y_eval>0.382]
     y_hat_opt = y_hat[y_eval>0.382]
     ax.plot(y_eval_opt.flatten(), y_hat_opt.flatten(), linestyle='', 
         marker='o', color='darkorange', alpha=0.7, ms=8)
     ax.plot(np.linspace(y_eval.min(), 0.8, 100), np.linspace(y_eval.min(), 0.8, 100), 
         linestyle='--', color='slategrey', alpha=0.5)
-    plt.savefig(f'{fpath}figs/gpr_validation_full_range', dpi=300)
+    # ax.text(-950, -100, r'$R^2 = %.3f$'%r2)
+    # ax.text(-950, -200, r'$RMSE = %.3f$'%rmse)
+    ax.text(0.05, 0.75, r'$R^2 = %.3f$'%r2)
+    ax.text(0.05, 0.65, r'$RMSE = %.3f$'%rmse)
+    plt.savefig(f'{fpath}figs/gpr_validation_{plot_range}_range_text.png', dpi=300)
 
     # save validation samples
     if save_vali:
@@ -207,9 +214,10 @@ def fix_plot(gp, variable_temp, plot_range='full'):
     ax.axhline(0.382,  color='orange', linestyle='--', alpha=1 , linewidth=1)
     ax.set_xlabel('Number of fixed parameters')
     ax.set_ylabel('F')
-    plt.savefig(f'{fpath}{fig_path}/boxplot.png')
+    plt.savefig(f'{fpath}{fig_path}/boxplot.png', dpi=300)
     df_stats.to_csv(f'{fpath}{fig_path}/F_stats.csv')
-# END fix_plot()
+
+ # END fix_plot()
 
 
 # import GP
@@ -263,4 +271,7 @@ if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
 # Scatter plot and Pdf plot VS fixing parameters
-fix_plot(gp, variable_temp, plot_range='sub_rand')
+# fix_plot(gp, variable_temp, plot_range='sub_rand')
+
+# validation plot
+plot(gp, fpath, plot_range='sub', save_vali=False)
