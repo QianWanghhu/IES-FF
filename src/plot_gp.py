@@ -37,7 +37,8 @@ from gp_pce_model import *
 
 
 def plot(gp, fpath, plot_range='full', save_vali=False):
-    gp1 = pickle.load(open(f'../output/gp_run_0819/gp_0.pkl', "rb"))
+    gp1 = pickle.load(open(f'../output/gp_run_0816/gp_0.pkl', "rb"))
+    plot_range = 'sub'
     x1_training = gp1.X_train_
     y1_training = gp1.y_train_
     if plot_range == 'full':
@@ -66,7 +67,7 @@ def plot(gp, fpath, plot_range='full', save_vali=False):
     # ax.text(-950, -200, r'$RMSE = %.3f$'%rmse)
     ax.text(0.05, 0.75, r'$R^2 = %.3f$'%r2)
     ax.text(0.05, 0.65, r'$RMSE = %.3f$'%rmse)
-    plt.savefig(f'{fpath}figs/gpr_validation_{plot_range}_range_text.png', dpi=300)
+    # plt.savefig(f'{fpath}figs/gpr_validation_{plot_range}_range_text.png', dpi=300)
 
     # save validation samples
     if save_vali:
@@ -74,21 +75,27 @@ def plot(gp, fpath, plot_range='full', save_vali=False):
         np.savetxt('validation_samples.txt', vali_samples)
 # END plot()     
 
-def vali_samples_subreg(gp, variable, num_candidate_samples=2000):
-    candidates_samples = generate_gp_candidate_samples(gp, gp.X_train_.shape[1], 
+def vali_samples_subreg(gp, variable, num_candidate_samples=20000):
+    candidates_samples = generate_gp_candidate_samples(gp.X_train_.shape[1], 
         num_candidate_samples = num_candidate_samples, 
             generate_random_samples=None, variables=variable)
     
-    y_pred = gp.predict(candidates_samples)
-    samples_vali_subreg = candidates_samples[y_pred[y_pred>0][0:100], :]
-    samples_vali_full = candidates_samples[0:100, :]
-    vali_samples = np.zeros(shape=(200, 14))
-    vali_samples[0:100, 0:13] = samples_vali_subreg
-    vali_samples[100:200, 0:13] = samples_vali_full
-    vali_samples[0:100, 13] = y_pred[y_pred>0][0:100]
-    vali_samples[100:200, 13] = y_pred[0:100]
+    y_pred = gp.predict(candidates_samples.T)
+    samples_vali_subreg1 = candidates_samples[:, np.where(y_pred>0.382)[0][0:20]]
+    samples_vali_subreg2 = candidates_samples[:, np.where(y_pred>0)[0]]
+    y_sub1 = gp.predict(samples_vali_subreg2.T)
+    samples_vali_subreg2 = samples_vali_subreg2[:, np.where(y_sub1<=0.382)[0][0:80]]
+    samples_vali_full = candidates_samples[:, 0:100]
+    vali_samples = np.zeros(shape=(14, 200))
+    vali_samples[0:13, 0:20] = samples_vali_subreg1
+    vali_samples[0:13, 20:100] = samples_vali_subreg2
+    vali_samples[0:13, 100:200] = samples_vali_full
+    vali_samples[13, 0:20] = gp.predict(samples_vali_subreg1.T).flatten()
+    vali_samples[13, 20:100] = gp.predict(samples_vali_subreg2.T).flatten()
+    vali_samples[13, 100:200] = y_pred[0:100].flatten()
     return vali_samples
 # END vali_samples_subreg()
+
 
 # Calculate the ratio of samples in the subregion
 def ratio_subreg(gp):
@@ -266,12 +273,15 @@ else:
         index_sort[int(k)] = index_sort_load[k]
 
 # Calculate the ratio of calibrating samples in the sub-region
-if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
-    df = ratio_subreg(gp)
-    df.to_csv(f'{fpath}ratio_cali_subreg.csv')
+# if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
+#     df = ratio_subreg(gp)
+#     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
 # Scatter plot and Pdf plot VS fixing parameters
 # fix_plot(gp, variable_temp, plot_range='sub_rand')
 
 # validation plot
-plot(gp, fpath, plot_range='sub', save_vali=False)
+# vali_samples = vali_samples_subreg(gp, variable_temp, 20000)
+# np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
+
+# plot(gp, fpath, plot_range='sub', save_vali=False)
