@@ -183,12 +183,16 @@ def generate_parameter_ensemble(nsample, param_ensemble, datapath, seed=None):
     else:
         print(f'The file of parameter ensemble exists under the folder')
 
-def change_param_values(v, pvalue_dict, fromList=False, subcatment=None):
+def change_param_values(v, pvalue_dict, fromList=False, initial_values=None, subcatment=None):
     assert isinstance(v, veneer.general.Veneer),"vs has to be an veneer object."
+    if initial_values is not None:
+        dwc_init = np.array(initial_values['DWC'])
+        dwc_set = np.where(dwc_init>0, pvalue_dict['DWC'], 0)
+        
     if subcatment is None:
         v.model.catchment.generation.set_param_values('DeliveryRatioSurface',pvalue_dict['DRF'],  fus=['Sugarcane'], fromList=fromList)
-        v.model.catchment.generation.set_param_values('DeliveryRatioSeepage',pvalue_dict['DRP'],  fus=['Sugarcane'], fromList=fromList)
-        v.model.catchment.generation.set_param_values('DWC', pvalue_dict['DWC'], fus=['Sugarcane'], fromList=fromList)
+        v.model.catchment.generation.set_param_values('DeliveryRatioSeepage',pvalue_dict['DRP'],  fus=['Sugarcane'], fromList=fromList) 
+        v.model.catchment.generation.set_param_values('DWC', dwc_set, fus=['Sugarcane'], fromList=fromList)
         # v.model.catchment.generation.set_param_values('Load_Conversion_Factor', pvalue_dict['LCF'], fus=['Sugarcane'], fromList=fromList)
         v.model.catchment.generation.set_param_values('dissConst_DWC', pvalue_dict['gfDWC'], fus=['Grazing Forested'], fromList=fromList)
         v.model.catchment.generation.set_param_values('dissConst_EMC', pvalue_dict['gfEMC'], fus=['Grazing Forested'], fromList=fromList)
