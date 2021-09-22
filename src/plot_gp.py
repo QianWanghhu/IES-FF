@@ -146,6 +146,9 @@ def fix_plot(gp, variable_temp, plot_range='full'):
     elif plot_range == 'sub_rand':
         x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 10]
         fig_path = 'fix_rand_subreg'
+    elif plot_range == 'sub_max':
+        x_default = dot_samples[:, np.where(dot_vals>=dot_vals.max())[0]]
+        fig_path = 'fix_max_subreg'
     else:
         AssertionError
 
@@ -278,7 +281,7 @@ else:
 #     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
 # Scatter plot and Pdf plot VS fixing parameters
-# fix_plot(gp, variable_temp, plot_range='sub_rand')
+fix_plot(gp, variable_temp, plot_range='sub_max')
 
 # validation plot
 # vali_samples = vali_samples_subreg(gp, variable_temp, 20000)
