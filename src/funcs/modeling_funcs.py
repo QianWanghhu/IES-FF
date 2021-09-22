@@ -88,7 +88,7 @@ def generate_observation_default(v, criteria, start_date, end_date, retrieve_tim
     return load
 # End generate_observation_noised()
 
-def generate_observation_ensemble(vs_list, criteria, start_date, end_date, parameters, retrieve_time):
+def generate_observation_ensemble(vs_list, criteria, start_date, end_date, parameters, retrieve_time, initial_values):
     """
     Run the model to obtain observations without noise.
     Parameters:
@@ -126,7 +126,7 @@ def generate_observation_ensemble(vs_list, criteria, start_date, end_date, param
             vs.drop_all_runs()
             parameter_dict = parameters.iloc[total_runs-1]
             # Make sure names of parameters are correct!
-            vs = change_param_values(vs, parameter_dict)
+            vs = change_param_values(vs, parameter_dict, initial_values=initial_values)
             response = vs.run_model(params={'NoHardCopyResults':True}, start=start_date, end=end_date, run_async=True)
             group_run_responses.append(response)
 
@@ -191,8 +191,8 @@ def change_param_values(v, pvalue_dict, fromList=False, initial_values=None, sub
         
     if subcatment is None:
         v.model.catchment.generation.set_param_values('DeliveryRatioSurface',pvalue_dict['DRF'],  fus=['Sugarcane'], fromList=fromList)
-        v.model.catchment.generation.set_param_values('DeliveryRatioSeepage',pvalue_dict['DRP'],  fus=['Sugarcane'], fromList=fromList) 
-        v.model.catchment.generation.set_param_values('DWC', dwc_set, fus=['Sugarcane'], fromList=fromList)
+        v.model.catchment.generation.set_param_values('DeliveryRatioSeepage',pvalue_dict['DRP'],  fus=['Sugarcane'], fromList=fromList)
+        v.model.catchment.generation.set_param_values('DWC', dwc_set, fus=['Sugarcane'], fromList=True)
         # v.model.catchment.generation.set_param_values('Load_Conversion_Factor', pvalue_dict['LCF'], fus=['Sugarcane'], fromList=fromList)
         v.model.catchment.generation.set_param_values('dissConst_DWC', pvalue_dict['gfDWC'], fus=['Grazing Forested'], fromList=fromList)
         v.model.catchment.generation.set_param_values('dissConst_EMC', pvalue_dict['gfEMC'], fus=['Grazing Forested'], fromList=fromList)
