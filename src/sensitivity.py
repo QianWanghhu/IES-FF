@@ -1,75 +1,57 @@
 #!/usr/bin/env python
-from numba.core.typing.templates import BaseRegistryLoader
 import numpy as np
-import matplotlib.pyplot as plt
-from numpy.core.fromnumeric import var
 import pandas as pd
 import pickle
 import json
-import scipy
-import seaborn as sns
 
 from scipy import stats
 # from scipy.optimize import root
-from scipy.optimize import bisect
 import pyapprox as pya
-from pyapprox import generate_independent_random_samples
-import matplotlib as mpl
-import spotpy as sp
 from scipy import stats
 
-mpl.rcParams['font.size'] = 16
-mpl.rcParams['lines.linewidth'] = 3
-mpl.rcParams['text.usetex'] = False  # use latex for all text handling
-mpl.rcParams['savefig.bbox'] = 'tight'
-mpl.rcParams['savefig.format'] = 'png'  # gives best resolution plots
-mpl.rcParams['axes.labelsize'] = 20
-mpl.rcParams['axes.titlesize'] = 20
-mpl.rcParams['xtick.labelsize'] = 20
-mpl.rcParams['ytick.labelsize'] = 20
-mpl.rcParams['legend.fontsize'] = 16
-# print mpl.rcParams.keys()
-mpl.rcParams['text.latex.preamble'] = \
-    r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
-
 from funcs.read_data import file_settings, variables_prep
-from funcs.utils import partial_rank, return_sa
+from funcs.utils import partial_rank
 from gp_pce_model import *
 
-    # import GP
+def sa_gp(fsave, gp, ind_vars, variables, param_names, 
+    cal_type='sampling', save_values=True, norm_y=False):
+    """
+    Sampling-based and analytic sensitivity analysis with use of GP.
 
-fpath = '../output/gp_run_0816/'
-gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
-x_training = gp.X_train_
-y_training = gp.y_train_
+    Parameters:
+    ===========
+    fsave: str, the path to save results
+    gp: Gaussian Process object
+    ind_vars: int, the number of variables in the model for analysis
+    variables: random variables
+    param_names: list of str, the parameter names and the length should be ind_vars
+    cal_type: str, "sampling" or "analytic"
+    save_values: bool, if True, save the sensitivty values
+    notm_y: bool, if True, normalize the GP outputs as the y for sensitivity analysis
 
-# Resample in the ranges where the objective values are above 0
-x_select = x_training[np.where(y_training>0)[0], :]
-x_range = x_select.max(axis=0)
-univariable_temp = [stats.uniform(0, x_range[ii]) for ii in range(0, x_range.shape[0])]
-variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
+    Returns:
+    =========
+    index_sort: dict, the partial rankings of parameters
+    """
+    if not os.path.exists(fsave):
+        os.mkdir(fsave)
 
-# visualization the effects of factor fixing
-# define the variables for PCE
-param_file = file_settings()[-1]
-ind_vars, variables = variables_prep(param_file, product_uniform='uniform', dummy=False)
-var_trans = AffineRandomVariableTransformation(variables, enforce_bounds=True)
-param_names = pd.read_csv(param_file, usecols=[2]).values.flatten()
-
-def sa_gp(fsave, gp, ind_vars, variables, cal_type='sampling', save_values=True):
-    filename = f'{fsave}/rankings-sample.json'
+    filename = f'{fsave}/rankingss.json'
     if not os.path.exists(filename):
         order = 2
         interaction_terms = pya.compute_hyperbolic_indices(len(ind_vars), order)
         interaction_terms = interaction_terms[:, np.where(
         interaction_terms.max(axis=0) == 1)[0]]
         if cal_type == 'sampling':
-            sa = pyapprox.sampling_based_sobol_indices_from_gaussian_process(gp, 
-                variables, interaction_terms=interaction_terms, nsamples=600, 
-                    ngp_realizations=100, ninterpolation_samples = 500, nsobol_realizations = 10,
-                    stat_functions=(np.mean, np.std))
+            if norm_y:
+                sa = sa_norm_f(gp, ind_vars, variables)
+            else:
+                sa = pyapprox.sampling_based_sobol_indices_from_gaussian_process(gp, 
+                    variables, interaction_terms=interaction_terms, nsamples=600, 
+                        ngp_realizations=100, ninterpolation_samples = 500, nsobol_realizations = 10,
+                        stat_functions=(np.mean, np.std))
 
-            np.savez(filename, total_effects=sa['total_effects']['values'])
+            np.savez(filename, sa)
             ST_values = sa['total_effects']['values']
             ST = np.zeros(shape=(ST_values.shape[0] * ST_values.shape[2], ST_values.shape[1]))
             for ii in range(ST_values.shape[2]):
@@ -86,7 +68,7 @@ def sa_gp(fsave, gp, ind_vars, variables, cal_type='sampling', save_values=True)
         index_sort = partial_rank(ST, ST.shape[1], conf_level=0.95)
         if save_values:
             ST_mean = sa['total_effects']['mean']
-            ST_mean = pd.DataFrame(data = ST_mean, index = param_names)
+            ST_mean = pd.DataFrame(data = ST_mean, index = param_names, columns=['ST'])
             ST_mean['std'] = sa['total_effects']['std']
             ST_mean.to_csv(f'{fsave}/ST.csv')
 
@@ -99,8 +81,74 @@ def sa_gp(fsave, gp, ind_vars, variables, cal_type='sampling', save_values=True)
         index_sort = {}
         for k, v in index_sort_load.items():
             index_sort[int(k)] = index_sort_load[k]
+        
+        ST = pd.read_csv(f'{fsave}/ST.csv')
 
-    return index_sort
+    return index_sort, ST
 
 
-sa_gp(fpath+'sampling-sa/', gp, ind_vars, variables, cal_type='sampling', save_values=True)
+def sa_norm_f(gp, ind_vars, variables):
+    """
+    Sampling-based approach to calculate sensitivity analysis.
+    Parameters:
+    ===========
+    fsave: str, the path to save results
+    fun: Gaussian Process object
+    ind_vars: int, the number of variables in the model for analysis
+    variables: random variables
+
+    Returns:
+    =========
+    index_sort: dict, the partial rankings of parameters
+    """
+    # Define problems
+
+    from pyapprox.gaussian_process import generate_gp_realizations
+    from pyapprox.sensitivity_analysis import repeat_sampling_based_sobol_indices
+
+    def fun_wrapper(fun):
+        """
+        Function wrapper for calculating the normalized objective function values.
+        """
+        def cal_fun(x):
+            y = 1 / (2 - fun(x))
+            return y
+        return cal_fun
+
+    order = 2
+    interaction_terms = pya.compute_hyperbolic_indices(len(ind_vars), order)
+    interaction_terms = interaction_terms[:, np.where(
+    interaction_terms.max(axis=0) == 1)[0]]
+    nsamples=800; ngp_realizations=100; ninterpolation_samples = 500;
+    nsobol_realizations = 10; stat_functions=(np.mean, np.std)
+    ncandidate_samples=10000; nvalidation_samples=100
+    sampling_method='sobol'
+
+    assert nsobol_realizations > 0
+
+    if ngp_realizations > 0:
+        assert ncandidate_samples > ninterpolation_samples
+        gp_realizations = generate_gp_realizations(
+            gp, ngp_realizations, ninterpolation_samples, nvalidation_samples,
+            ncandidate_samples, variables, True, 0)
+        fun = gp_realizations
+    else:
+        fun = gp
+
+    sobol_values, total_values, variances, means = \
+        repeat_sampling_based_sobol_indices(
+            fun_wrapper(fun), variables, interaction_terms, nsamples,
+            sampling_method, nsobol_realizations)
+
+    result = dict()
+    data = [sobol_values, total_values, variances, means]
+    data_names = ['sobol_indices', 'total_effects', 'variance', 'mean']
+    for item, name in zip(data, data_names):
+        subdict = dict()
+        for ii, sfun in enumerate(stat_functions):
+            # have to deal with averaging over axis = (0, 1) and axis = (0, 2)
+            # for mean, variance and sobol_indices, total_effects respectively
+            subdict[sfun.__name__] = sfun(item, axis=(0, -1))
+        subdict['values'] = item
+        result[name] = subdict
+    return result
