@@ -1,20 +1,14 @@
 #!/usr/bin/env python
-from numba.core.typing.templates import BaseRegistryLoader
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
-import json
-import scipy
 import seaborn as sns
 
 from scipy import stats
 # from scipy.optimize import root
-from scipy.optimize import bisect
-import pyapprox as pya
 from pyapprox import generate_independent_random_samples
 import matplotlib as mpl
-import spotpy as sp
 from scipy import stats
 
 mpl.rcParams['font.size'] = 16
@@ -116,31 +110,17 @@ def ratio_subreg(gp):
     return ratio_df
 # END ratio_subreg()
 
-# define the order to fix parameters
-def fix_plot(gp, variable_temp, plot_range='full'):
-    from funcs.utils import dotty_plot, define_constants, fix_sample_set
-    dot_fn = f'{file_settings()[0]}gp_run_0816/dotty_samples.txt'
-    if not os.path.exists(dot_fn):
-        dot_samples = generate_independent_random_samples(variable_temp, 1000000)
-        np.savetxt(dot_fn, dot_samples)
-    else:
-        dot_samples = np.loadtxt(dot_fn)
-    dot_vals = np.zeros(shape=(dot_samples.shape[1], 1))
-    for ii in range(100):
-        dot_vals[10000*ii:(ii+1)*10000] = gp.predict(dot_samples[:, 10000*ii:(ii+1)*10000].T)
-    # dot_samples = dot_samples[:, np.where(dot_vals >= 0.382)[0]]
-    # dot_vals = dot_vals[dot_vals>=0.382]
-    
-    samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
-    vals_opt = dot_vals[dot_vals>0.382]
-    print(f'Number of values beyond the threshold: {samples_opt.shape[0]}')
-    if plot_range == 'full_median':
-        x_default = define_constants(dot_samples, 13, stats = np.median)
+from funcs.utils import define_constants
+def choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals):
+    if plot_range == 'full_mean':
+        x_default = define_constants(dot_samples, 13, stats = np.mean)
         fig_path = 'fix_median_full'
     elif plot_range == 'sub_median':
+        samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
         x_default = define_constants(samples_opt, 13, stats = np.median)
         fig_path = 'fix_median_subreg'
     elif plot_range == 'sub_mean':
+        samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
         x_default = define_constants(samples_opt, 13, stats = np.mean)
         fig_path = 'fix_mean_subreg'
     elif plot_range == 'sub_rand':
@@ -151,57 +131,53 @@ def fix_plot(gp, variable_temp, plot_range='full'):
         fig_path = 'fix_max_subreg'
     else:
         AssertionError
+    return x_default, fig_path
 
-    y_default = gp.predict(x_default.reshape(x_default.shape[0], 1).T)[0]
-    print(f'F of the point with default values: {y_default}')
-    x_default = np.append(x_default, y_default)
-    np.savetxt(f'{fpath}/{fig_path}/fixed_values.txt', x_default)
-
-    num_opt = []
-    vals_dict = {}
-    index_fix = np.array([], dtype=int)
-    pct_optimal = {}
-
-    for ii in range(max(index_sort.keys()), 0, -1):
-        index_fix = np.append(index_fix, index_sort[ii])
-        print(f'Fix {index_fix.shape[0]} parameters')
-        print(f'index: {index_fix}')
-        samples_fix = fix_sample_set(index_fix, samples_opt, x_default)
-        vals_fix = np.zeros_like(vals_opt)
-        # calculate with surrogate 
-        vals_fix = gp.predict(samples_fix.T)
-        # for ii in range(100):
-        #     vals_fix[10000*ii:(ii+1)*10000] = gp.predict(samples_fix[:, 10000*ii:(ii+1)*10000].T)
-                    
-        # select points statisfying the optima
-        index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
-        samples_opt_fix = samples_fix[:, index_opt_fix]
-        vals_opt_fix = vals_fix[index_opt_fix]
-        vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()
-                                                                                                                                                                                                                                                                                                                                                    
-        # plot     
-        fig = dotty_plot(samples_opt, vals_opt.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
-            param_names, 'F', orig_x_opt=samples_fix, orig_y_opt=vals_fix);
-        plt.savefig(f'{fpath}/{fig_path}/{len(index_fix)}.png', dpi=300)
-        # calculate the ratio of optimal values
-        pct_optimal[f'fix_{len(index_fix)}'] = vals_opt_fix.shape[0] / dot_vals.shape[0]
-    # # END For
-
-    pct_optimal = pd.DataFrame.from_dict(pct_optimal, orient='index', columns=['Proportion'])
-    pct_optimal.to_csv(f'{file_settings()[0]}gp_run_0816/{fig_path}/Proportion_optimal.csv')
+def cal_stats(vals_opt, vals_dict, re_eval):
+    """
+    This is used to calculate the statstics of the objective values VS parameter fixing.
+    """
     # PDF plot
+    df_stats = pd.DataFrame(columns=['mean', 'std', 'qlow','qup'])
+    if re_eval:
+        df_stats.loc['full_set', ['mean', 'std']] = [vals_opt[vals_opt>0.382].mean(), vals_opt[vals_opt>0.382].std()]
+        df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt[vals_opt>0.382], [0.025, 0.957])
+    else:
+        df_stats.loc['full_set', ['mean', 'std']] = [vals_opt.mean(), vals_opt.std()]
+        df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt, [0.025, 0.957])
+
+    for key, value in vals_dict.items():
+        if key != 'fix_13':
+            if re_eval:
+                value = value[value>0.382]
+
+            df_stats.loc[key, 'mean'] = value.mean()
+            df_stats.loc[key, 'std'] = value.std()
+            df_stats.loc[key, 'qlow':'qup'] = np.quantile(value, [0.025, 0.975])
+
+    return df_stats
+
+def cal_prop_optimal(vals_dict, dot_vals, fig_path):
+    """calculate the ratio of optimal values.
+    """
+    pct_optimal = {}
+    for key, value in vals_dict.items():
+        pct_optimal[key] = value.shape[0] / dot_vals.shape[0]
+    pct_optimal = pd.DataFrame.from_dict(pct_optimal, orient='index', columns=['Proportion'])
+    pct_optimal.to_csv(f'{fig_path}/Proportion_optimal.csv')
+# # END For
+
+def plot_pdf(vals_opt, vals_dict, re_eval, fig_path):
     fig, axes = plt.subplots(1, 3, figsize=(20, 6), sharex=True)
     sns.distplot(vals_opt.flatten(), hist=False,  ax=axes[0])
+
     k = 0
-    df_stats = pd.DataFrame(columns=['mean', 'std', 'qlow','qup'])
-    df_stats.loc['full_set', ['mean', 'std']] = [vals_opt.mean(), vals_opt.std()]
-    df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt, [0.025, 0.957])
-    for key, value in vals_dict.items():
-        sns.distplot(value.flatten(), hist=False, ax=axes[k//4]);
-        df_stats.loc[key, 'mean'] = value.mean()
-        df_stats.loc[key, 'std'] = value.std()
-        df_stats.loc[key, 'qlow':'qup'] = np.quantile(value, [0.025, 0.975])
-        k += 1
+    for key, value in vals_dict.items():    
+        if key != 'fix_13':
+            if re_eval:
+                value = value[value>0.382]
+            sns.distplot(value.flatten(), hist=False, ax=axes[k//4]);
+            k += 1
 
     axes[0].legend(['full_set', *list(vals_dict.keys())[0:4]])
     axes[1].set_xlabel('F')
@@ -211,24 +187,110 @@ def fix_plot(gp, variable_temp, plot_range='full'):
     axes[2].set_ylabel('')
     for ii in range(3):
         axes[ii].axvline(0.382,  color='grey', linestyle='--', alpha=0.7)
-    plt.savefig(f'{fpath}/{fig_path}/objective_dist.png', dpi=300)
+    plt.savefig(f'{fig_path}/objective_dist.png', dpi=300)
 
-    # Box plot
-    # breakpoint()
+def box_plot(vals_dict, vals_opt, num_fix, fig_path, re_eval):
     fig2 = plt.figure(figsize=(8, 6))
     df = pd.DataFrame.from_dict(vals_dict)
     df['fix_0'] = vals_opt.flatten()
-    df.columns = [*np.arange(1, 13), 0]
-    df = df[np.arange(13)]
-    ax = sns.boxplot(data=df, saturation=0.5, linewidth=1, whis=0.5)
+    df.columns = [*num_fix, 0]
+    df = df[[0, *num_fix]]
+    if re_eval:
+        df_filter = df.where(df>0.382)
+    else:
+        df_filter = df
+
+    ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis=0.5)
     ax.axhline(0.382,  color='orange', linestyle='--', alpha=1 , linewidth=1)
     ax.set_xlabel('Number of fixed parameters')
     ax.set_ylabel('F')
-    plt.savefig(f'{fpath}{fig_path}/boxplot.png', dpi=300)
-    df_stats.to_csv(f'{fpath}{fig_path}/F_stats.csv')
+    # ax.set_ylim(0.2, 1.4)
+    plt.savefig(f'{fig_path}/boxplot.png', dpi=300)
 
+# define the order to fix parameters
+def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type, 
+    plot_range='full', re_eval=False, norm_y=False):
+    from funcs.utils import fix_sample_set, dotty_plot
+
+    dot_fn = f'{file_settings()[0]}gp_run_0816/dotty_samples2.txt'
+    if not os.path.exists(dot_fn):
+        dot_samples = generate_independent_random_samples(variables, 200000)
+        np.savetxt(dot_fn, dot_samples)
+    else:
+        dot_samples = np.loadtxt(dot_fn)
+    dot_vals = np.zeros(shape=(dot_samples.shape[1], 1))
+    for ii in range(20):
+        dot_vals[10000*ii:(ii+1)*10000] = gp.predict(dot_samples[:, 10000*ii:(ii+1)*10000].T)
+    # dot_samples = dot_samples[:, np.where(dot_vals >= 0.382)[0]]
+    # dot_vals = dot_vals[dot_vals>=0.382]
+    
+    if re_eval:
+        samples_opt = dot_samples 
+        vals_opt = dot_vals 
+    else:
+        samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
+        vals_opt = dot_vals[dot_vals>0.382]
+    
+    # Choose the fixed values
+    print(f'Number of values beyond the threshold: {samples_opt.shape[0]}')
+    x_default, fig_path = choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals)
+    fig_path = fsave + fig_path
+    y_default = gp.predict(x_default.reshape(x_default.shape[0], 1).T)[0]
+    print(f'F of the point with default values: {y_default}')
+    x_default = np.append(x_default, y_default)
+    if not os.path.exists(fig_path):
+        os.makedirs(fig_path)
+    np.savetxt(f'{fig_path}/fixed_values.txt', x_default)
+
+    # calculate / import parameter rankings
+    from sensitivity import sa_gp
+    if sa_cal_type == 'analytic':
+        vars = variables_full
+    else:
+        vars = variable_temp
+    _, ST = sa_gp(fsave, gp, ind_vars, vars, param_names, 
+        cal_type=sa_cal_type, save_values=True, norm_y=norm_y)
+    par_rank = np.argsort(ST['ST'].values)
+    index_sort = {ii:par_rank[12-ii] for ii in range(13)}
+
+    num_fix = []
+    vals_dict = {}
+    index_fix = np.array([], dtype=int)
+    for ii in range(max(index_sort.keys()), -1, -1):
+        index_fix = np.append(index_fix, index_sort[ii])
+        num_fix.append(index_fix.shape[0])
+        print(f'Fix {index_fix.shape[0]} parameters')
+        print(f'index: {index_fix}')
+        samples_fix = fix_sample_set(index_fix, samples_opt, x_default)
+        vals_fix = np.zeros_like(vals_opt)
+    
+        # calculate with surrogate 
+        if re_eval == True:
+            for ii in range(20):
+                vals_fix[10000*ii:(ii+1)*10000] = gp.predict(samples_fix[:, 10000*ii:(ii+1)*10000].T)
+        else:
+            vals_fix = gp.predict(samples_fix.T)
+
+        # select points statisfying the optima
+        index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
+        samples_opt_fix = samples_fix[:, index_opt_fix]
+        vals_opt_fix = vals_fix[index_opt_fix]
+        vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()                                                                                                                                                                                                                                                                                                                                         
+        # plot     
+        fig = dotty_plot(samples_opt, vals_opt.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
+            param_names, 'F', orig_x_opt=samples_fix, orig_y_opt=vals_fix);
+        plt.savefig(f'{fig_path}/{len(index_fix)}.png', dpi=300)
+
+    cal_prop_optimal(vals_dict, dot_vals, fig_path)
+    # Calculate the stats of objectives vs. Parameter Fixing
+    df_stats = cal_stats(vals_opt, vals_dict, re_eval)
+    df_stats.to_csv(f'{fig_path}/F_stats.csv')
+    # pdf plot
+    plot_pdf(vals_opt, vals_dict, re_eval, fig_path)
+    # Box plot
+    box_plot(vals_dict, vals_opt, num_fix, fig_path, re_eval)
+    return dot_vals, vals_dict, index_fix
  # END fix_plot()
-
 
 # import GP
 fpath = '../output/gp_run_0816/'
@@ -245,44 +307,25 @@ variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
 # visualization the effects of factor fixing
 # define the variables for PCE
 param_file = file_settings()[-1]
-ind_vars, variables = variables_prep(param_file, product_uniform='uniform', dummy=False)
-var_trans = AffineRandomVariableTransformation(variables, enforce_bounds=True)
-filename = f'{fpath}rankings.json'
+ind_vars, variables_full = variables_prep(param_file, product_uniform='uniform', dummy=False)
+var_trans = AffineRandomVariableTransformation(variables_full, enforce_bounds=True)
 param_names = pd.read_csv(param_file, usecols=[2]).values.flatten()
-if not os.path.exists(filename):
-    order = 2
-    interaction_terms = pya.compute_hyperbolic_indices(len(ind_vars), order)
-    interaction_terms = interaction_terms[:, np.where(
-    interaction_terms.max(axis=0) == 1)[0]]
-    sa = pyapprox.analytic_sobol_indices_from_gaussian_process(gp, variables, 
-        interaction_terms, ngp_realizations=100, ninterpolation_samples=500, 
-            use_cholesky=True, ncandidate_samples=10000, nvalidation_samples=200,
-            stat_functions=(np.mean, np.std))
-    np.savez(filename, total_effects=sa['total_effects']['values'])
-    ST = sa['total_effects']['values']
-    ST_mean = sa['total_effects']['mean']
-    ST_mean = pd.DataFrame(data = ST_mean, index = param_names)
-    ST_mean['std'] = sa['total_effects']['std']
-    ST_mean.to_csv(f'{fpath}ST.csv')
-    index_sort = partial_rank(ST, ST.shape[1], conf_level=0.95)
-    with open(filename, 'w') as fp:
-        json.dump(index_sort, fp, indent=2)
-
-else:
-    with open(filename, 'r') as fp:
-        index_sort_load = json.load(fp)
-    index_sort = {}
-    for k, v in index_sort_load.items():
-        index_sort[int(k)] = index_sort_load[k]
 
 # Calculate the ratio of calibrating samples in the sub-region
 # if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
 #     df = ratio_subreg(gp)
 #     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
-# Scatter plot and Pdf plot VS fixing parameters
-fix_plot(gp, variable_temp, plot_range='sub_max')
-
+# Calculate results with and create plots VS fixing parameters
+fsave = fpath + 'sampling-sa-norm/'
+vals_fix_dict = {}
+# dot_vals, vals_fix_dict['full_mean'] = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
+#     plot_range='full_mean', re_eval=True, norm_y = True)
+dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
+    plot_range='sub_mean', re_eval=True, norm_y = True)
+_, vals_fix_dict['sub_rand '], _  = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
+    plot_range='sub_rand', re_eval=True, norm_y = True)
+# sub_mean
 # validation plot
 # vali_samples = vali_samples_subreg(gp, variable_temp, 20000)
 # np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
