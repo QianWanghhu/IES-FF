@@ -80,12 +80,7 @@ def define_constants(x, num_vars, stats = np.median):
     x_default: np.ndarray, of the shape (D, 1)
     """
     assert x.shape[0] == num_vars, "Samples should be of two dimensions N*D where D is the number of parameters"
-    if stats == 'median':
-        x_default = stats(x, axis=1)
-    elif stats == 'mean':
-        x_default = stats(x, axis=1)
-    else:
-        AssertionError
+    x_default = stats(x, axis=1)
     return x_default
 # End define_constants
 
