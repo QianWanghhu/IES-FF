@@ -18,7 +18,7 @@ from sklearn.gaussian_process.kernels import RBF, \
     Matern
 
 from pyapprox.density import tensor_product_pdf
-from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_candidate_samples
+from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_gp_candidate_samples
 from pyapprox.low_discrepancy_sequences import transformed_halton_sequence
 from pyapprox.utilities import compute_f_divergence, \
     get_tensor_product_quadrature_rule
@@ -30,8 +30,6 @@ from pyapprox.variable_transformations import AffineRandomVariableTransformation
 
 import matplotlib as mpl
 from matplotlib import rc
-import spotpy as sp
-
 from funcs.read_data import variables_prep, file_settings
 from funcs.modeling_funcs import vs_settings, \
         modeling_settings, paralell_vs, obtain_initials, change_param_values
@@ -52,16 +50,16 @@ mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
 # Create the copy of models and veneer list
-project_name = 'MW_BASE_RC10.rsproj'
-veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-first_port=15000; num_copies = 8
-_, things_to_record, _, _, _ = modeling_settings()
-processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
+# project_name = 'MW_BASE_RC10.rsproj'
+# veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
+# first_port=15000; num_copies = 1
+# _, things_to_record, _, _, _ = modeling_settings()
+# processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
 
-vs_list = vs_settings(ports, things_to_record)
-# obtain the initial values of parameters 
-initial_values = obtain_initials(vs_list[0])
-# vs_list = []
+# vs_list = vs_settings(ports, things_to_record)
+# # obtain the initial values of parameters 
+# initial_values = obtain_initials(vs_list[0])
+vs_list = []
 def run_source_lsq(vars, vs_list=vs_list):
     """
     Script used to run_source and return the output file.
@@ -129,16 +127,17 @@ def run_source_lsq(vars, vs_list=vs_list):
     
     # loop over the vars and try to use parallel     
     parameter_df = pd.DataFrame(index=np.arange(vars.shape[1]), columns=parameters.Name_short)
-    for i in range(vars_copy.shape[1]):
-        parameter_df.iloc[i] = vars_copy[:, i]
+    for i in range(vars.shape[1]):
+        parameter_df.iloc[i] = vars[:, i]
 
     # set the time period of the results
     retrieve_time = [pd.Timestamp('2009-07-01'), pd.Timestamp('2018-06-30')]
 
     # define the modeling period and the recording variables
     _, _, criteria, start_date, end_date = modeling_settings()
+    initial_values = obtain_initials(vs_list[0])
     din = generate_observation_ensemble(vs_list, 
-        criteria, start_date, end_date, parameter_df, retrieve_time)
+        criteria, start_date, end_date, parameter_df, retrieve_time, initial_values)
 
     # obtain the sum at a given temporal scale
     din_126001A = timeseries_sum(din, temp_scale = 'annual')
@@ -357,19 +356,19 @@ def convergence_study(kernel, function, sampler,
                 print('----case 1-----')
                 thsd = [0.382, 0.0, 1]
                 resample_flag = True
-            elif (errors[sample_step - 2] > 0.5) | (errors[sample_step-3] > 0.5):
+            elif (errors[sample_step - 2] > 0.4) | (errors[sample_step-3] > 0.4):
                 print('----case 2-----')
                 resample_flag = False
             else:
                 print('----case 3-----')
-                thsd = [-10, 0.0, 1]
-                resample_flag = True
+            thsd = [-10, 0.0, 1]
+            # resample_flag = True
 
             print(f'--------Error of step {sample_step - 2}: {errors[sample_step - 2]}')
             print(f'--------Error of step {sample_step - 3}: {errors[sample_step - 3]}')
 
             y_training = gp.y_train_
-            num_y_optimize = y_training[y_training >= 0].shape[0]
+            num_y_optimize = y_training[y_training >= 0.382].shape[0]
 
             if resample_flag & (num_y_optimize <= 10):
                 new_candidates, thsd_viney = resample_candidate(gp, sampler, thsd, 
@@ -381,7 +380,7 @@ def convergence_study(kernel, function, sampler,
                 print(f'---------Threhsolds used to constrain parameter ranges:')
                 print(f' viney_F: {thsd_viney}')
                 print(f'---------The size of new candidate samples is {new_candidates.shape[1]}')
-
+                np.savetxt('candidate.txt', new_candidates)
     # save GP for NSE and PBIAS
     # pickle.dump(gp_ob1, open('gp_ob1.pkl', "wb"))
     # pickle.dump(gp_ob2, open('gp_ob2.pkl', "wb"))
