@@ -32,6 +32,17 @@ from gp_pce_model import *
 
 
 def plot(gp, fpath, plot_range='full', save_vali=False):
+    """
+    Function used to plot the figures of GP validation.
+    Parameters:
+    ===========
+    gp: Gaussian Process object
+    fpath: str, path to save figures
+    plot_range: str, defining the set of validation samples to use.
+                Use global samples if "full", else local. Default is "full".
+    save_vali: Bool, save figures if true. Default is False.
+
+    """
     gp1 = pickle.load(open(f'../output/gp_run_0816/gp_0.pkl', "rb"))
     plot_range = 'sub'
     x1_training = gp1.X_train_
@@ -71,6 +82,9 @@ def plot(gp, fpath, plot_range='full', save_vali=False):
 # END plot()     
 
 def vali_samples_subreg(gp, variable, num_candidate_samples=20000):
+    """
+    Function used to generate validation samples.
+    """
     candidates_samples = generate_gp_candidate_samples(gp.X_train_.shape[1], 
         num_candidate_samples = num_candidate_samples, 
             generate_random_samples=None, variables=variable)
@@ -94,6 +108,16 @@ def vali_samples_subreg(gp, variable, num_candidate_samples=20000):
 
 # Calculate the ratio of samples in the subregion
 def ratio_subreg(gp):
+    """
+    Function to calculate the ratio of samples in the subregion in the adaptive procedure.
+    Parameters:
+    ===========
+    gp: Gaussian Process object
+
+    Return:
+    =======
+    ration_df: pd.DataFrame, dataframe of the ratios at each iteration.
+    """
     y_training = gp.y_train_
     num_new_samples = np.asarray([0]+[20]+[8]*10+[16]*20+[24]*16+[40]*14)
     num_samples = np.cumsum(num_new_samples)
@@ -113,6 +137,22 @@ def ratio_subreg(gp):
 
 from funcs.utils import define_constants
 def choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals):
+    """
+    Function used to set the nomial point for fixing parameters at.
+    Parameters:
+    ===========
+    plot_range: str, decide which type of nomial values to use.
+    dot_samples: np.ndarray, of shape D*N where D is the number of parameters, 
+                the initial parameter samples for calculation objective functions
+    samples_opt: np.ndarray, of shape D*M where D is the number of parameters,
+                parameter samples resulting in objective functions above the threshold
+    dot_vals: np.ndarray, objective function values from dot_samples
+
+    Return:
+    ===========
+    x_default: list, the nominal values for all D parameters
+    fig_path: str, the dir defined by the type of nominal values for results to save
+    """
     if plot_range == 'full_mean':
         x_default = define_constants(dot_samples, 13, stats = np.mean)
         fig_path = 'fix_median_full'
@@ -136,7 +176,18 @@ def choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals):
 
 def cal_stats(vals_opt, vals_dict, re_eval):
     """
-    This is used to calculate the statstics of the objective values VS parameter fixing.
+    Function used to calculate the statstics of the objective values VS parameter fixing.
+    
+    Parameters:
+    ===========
+    vals_dict: dict, containing the objective function values with parameters being fixed
+    vals_opt: np.ndarray, objective function values used to calculate the statistics
+    re_eval: Bool, re-evaluate the OBJ using the whole samples if True, 
+                    else using the optimal set only for parameter fixing
+
+    Return:
+    ===========
+    df_stats: pd.DataFrame, of statistics
     """
     # PDF plot
     df_stats = pd.DataFrame(columns=['mean', 'std', 'qlow','qup'])
@@ -159,7 +210,11 @@ def cal_stats(vals_opt, vals_dict, re_eval):
     return df_stats
 
 def cal_prop_optimal(vals_dict, dot_vals, fig_path):
-    """calculate the ratio of optimal values.
+    """
+    Used to calculate the ratio of optimal values.
+    Parameters:
+    ===========
+    fig_path: str, dir to save the result formed into a pd.DataFrame
     """
     pct_optimal = {}
     for key, value in vals_dict.items():
@@ -169,6 +224,9 @@ def cal_prop_optimal(vals_dict, dot_vals, fig_path):
 # END cal_prop_optimal()
 
 def plot_pdf(vals_opt, vals_dict, re_eval, fig_path):
+    """
+    Used to generate the plot of probability distribution function.
+    """
     fig, axes = plt.subplots(1, 3, figsize=(20, 6), sharex=True)
     sns.distplot(vals_opt.flatten(), hist=False,  ax=axes[0])
 
@@ -190,7 +248,10 @@ def plot_pdf(vals_opt, vals_dict, re_eval, fig_path):
         axes[ii].axvline(0.382,  color='grey', linestyle='--', alpha=0.7)
     plt.savefig(f'{fig_path}/objective_dist.png', dpi=300)
 
-def box_plot(vals_dict, vals_opt, num_fix, fig_path, re_eval):
+def box_plot(vals_dict, vals_opt, num_fix, fig_path):
+    """
+    Used to generate the boxplot of objective values.
+    """
     fig2 = plt.figure(figsize=(8, 6))
     df = pd.DataFrame.from_dict(vals_dict)
     df['fix_0'] = vals_opt.flatten()
@@ -224,6 +285,28 @@ def spr_coef(dot_samples, dot_vals, fsave):
 # define the order to fix parameters
 def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type, 
     plot_range='full', re_eval=False, norm_y=False):
+    """
+    Used to fix parameter sequentially and obtaining unconditional outputs,
+    as well as boxplot and scatterplots.
+    Parameters:
+    ===========
+    gp: Gaussian Process object
+    variables: variable
+    fsave: the outer dir for saving results of, for example, spearman correlation
+    param_names: list, parameter names
+    ind_vars: individual parameter variable
+    sa_cal_type: str, the type of SA to conduct. Should be from ['analytic', 'sampling']
+    plot_range: str, defining the set of validation samples to use.
+                Use global samples if "full", else local. Default is "full".
+    re_eval: Bool
+    norm_y: Bool, whether to normalize objective functions when sensitive analysis
+    
+    Return:
+    ========
+    dot_vals: np.ndarray, objective function values from dot_samples
+    vals_dict: dict, containing the objective function values with parameters being fixed
+    index_fix: list, the ordered index of fixed parameters
+    """
     from funcs.utils import fix_sample_set, dotty_plot
 
     dot_fn = f'{file_settings()[0]}gp_run_0816/dotty_samples2.txt'
@@ -318,43 +401,44 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
  # END fix_plot()
 
 # import GP
-fpath = '../output/gp_run_0816/'
-gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
-x_training = gp.X_train_
-y_training = gp.y_train_
+if __name__ == '__main__':
+    fpath = '../output/gp_run_0816/'
+    gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
+    x_training = gp.X_train_
+    y_training = gp.y_train_
 
-# Resample in the ranges where the objective values are above 0
-x_select = x_training[np.where(y_training>0)[0], :]
-x_range = x_select.max(axis=0)
-univariable_temp = [stats.uniform(0, x_range[ii]) for ii in range(0, x_range.shape[0])]
-variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
+    # Resample in the ranges where the objective values are above 0
+    x_select = x_training[np.where(y_training>0)[0], :]
+    x_range = x_select.max(axis=0)
+    univariable_temp = [stats.uniform(0, x_range[ii]) for ii in range(0, x_range.shape[0])]
+    variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
 
-# visualization the effects of factor fixing
-# define the variables for PCE
-param_file = file_settings()[-1]
-ind_vars, variables_full = variables_prep(param_file, product_uniform='uniform', dummy=False)
-var_trans = AffineRandomVariableTransformation(variables_full, enforce_bounds=True)
-param_names = pd.read_csv(param_file, usecols=[2]).values.flatten()
+    # visualization the effects of factor fixing
+    # define the variables for PCE
+    param_file = file_settings()[-1]
+    ind_vars, variables_full = variables_prep(param_file, product_uniform='uniform', dummy=False)
+    var_trans = AffineRandomVariableTransformation(variables_full, enforce_bounds=True)
+    param_names = pd.read_csv(param_file, usecols=[2]).values.flatten()
 
-# Calculate the ratio of calibrating samples in the sub-region
-# if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
-#     df = ratio_subreg(gp)
-#     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
+    # Calculate the ratio of calibrating samples in the sub-region
+    # if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
+    #     df = ratio_subreg(gp)
+    #     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
-# Calculate results with and create plots VS fixing parameters
-fsave = fpath + 'analytic-sa/'
-norm_y = False
-vals_fix_dict = {}
-# dot_vals, vals_fix_dict['full_mean'] = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
-#     plot_range='full_mean', re_eval=True, norm_y = True)
-dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, variable_temp, fsave, param_names, 
-    ind_vars, 'analytic', plot_range='sub_mean', re_eval=True, norm_y = norm_y)
-_, vals_fix_dict['sub_rand'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
-    ind_vars, 'analytic', plot_range='sub_rand', re_eval=True, norm_y = norm_y)
-_, vals_fix_dict['sub_max'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
-    ind_vars, 'analytic', plot_range='sub_max', re_eval=True, norm_y = norm_y)
+    # Calculate results with and create plots VS fixing parameters
+    fsave = fpath + 'analytic-sa/'
+    norm_y = False
+    vals_fix_dict = {}
+    # dot_vals, vals_fix_dict['full_mean'] = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
+    #     plot_range='full_mean', re_eval=True, norm_y = True)
+    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, variable_temp, fsave, param_names, 
+        ind_vars, 'analytic', plot_range='sub_mean', re_eval=True, norm_y = norm_y)
+    _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
+        ind_vars, 'analytic', plot_range='sub_rand', re_eval=True, norm_y = norm_y)
+    _, vals_fix_dict['sub_max'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
+        ind_vars, 'analytic', plot_range='sub_max', re_eval=True, norm_y = norm_y)
 
-# validation plot
-# vali_samples = vali_samples_subreg(gp, variable_temp, 20000)
-# np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
-# plot(gp, fpath, plot_range='sub', save_vali=False)
+    # validation plot
+    # vali_samples = vali_samples_subreg(gp, variable_temp, 20000)
+    # np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
+    # plot(gp, fpath, plot_range='sub', save_vali=False)
