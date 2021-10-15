@@ -282,6 +282,42 @@ def spr_coef(dot_samples, dot_vals, fsave):
     coef_dict.to_csv(fsave+'spearman_coeff.csv')
     p_dict.to_csv(fsave+'spearman_p.csv')
 
+def corner_pot(samples_dict, vals_dict, x_opt, y_opt, param_names, index_fix, y_lab='F'):
+    """
+    Create dotty plots for the model inputs and outputs. 
+    Only part of the results will be plotted and shown in the paper due to the space available in a page.
+    Parameteres:
+    ============
+    x_samples: np.ndarray, input sample set of the shape D * N where D is the number of parameters and N is the sample size;
+    y_vals: np.ndarray, outputs corresponding to the x_samples and of the shape N * 1
+    x_opt: np.ndarray, parameter data points resulting in the selected optima
+    y_opt: np.ndarray, output values of the selected optima corresponding to x_opt
+    param_names: list, parameter names
+    orig_x_opt: np.ndarray, parameter data points resulting in the selected optima 
+                and the selection is based on outputs without factor fixing.
+    orig_y_opt: np.ndarray, output values of the selected optima corresponding to x_opt
+    
+    Returns:
+    ========
+    fig
+    """
+    fig, axes = plt.subplots(8, 8, figsize = (50, 50), sharey=True)
+    num_param_start = 6
+    for key, x_value in samples_dict.items():
+        num_fix = int(key.split('_')[1])
+        if num_fix > (num_param_start-1):
+            x_value_opt = x_value[:, np.where(vals_dict[key]>0.382)[0]]
+            y_value_opt = vals_dict[key][vals_dict[key]>0.382]
+            k = num_fix - num_param_start
+            for ii in index_fix[num_fix-1:]:
+                sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[k, num_fix-num_param_start], color='royalblue', s=20, alpha=0.8)
+                sns.scatterplot(x=x_value_opt[ii, :], y=y_value_opt.flatten(), ax=axes[k, num_fix-num_param_start], color='orange', s=20, alpha=0.5)
+                k += 1
+            axes[num_fix-num_param_start, 0].set_ylabel(y_lab)
+    fig.set_tight_layout(True)
+
+    return fig
+
 # define the order to fix parameters
 def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type, 
     plot_range='full', re_eval=False, norm_y=False):
@@ -309,7 +345,7 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
     """
     from funcs.utils import fix_sample_set, dotty_plot
 
-    dot_fn = f'{file_settings()[0]}gp_run_0816/dotty_samples2.txt'
+    dot_fn = f'{file_settings()[0]}gp_run_0816/dotty_samples.txt'
     if not os.path.exists(dot_fn):
         dot_samples = generate_independent_random_samples(variables, 200000)
         np.savetxt(dot_fn, dot_samples)
@@ -339,7 +375,7 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
     x_default = np.append(x_default, y_default)
     if not os.path.exists(fig_path):
         os.makedirs(fig_path)
-    np.savetxt(f'{fig_path}/fixed_values.txt', x_default)
+    # np.savetxt(f'{fig_path}/fixed_values.txt', x_default)
 
     # calculate / import parameter rankings
     from sensitivity import sa_gp
@@ -354,6 +390,7 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
 
     num_fix = []
     vals_dict = {}
+    samples_dict = {}
     index_fix = np.array([], dtype=int)
     for ii in range(max(index_sort.keys()), -1, -1):
         index_fix = np.append(index_fix, index_sort[ii])
@@ -374,7 +411,8 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
         index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
         samples_opt_fix = samples_fix[:, index_opt_fix]
         vals_opt_fix = vals_fix[index_opt_fix]
-        vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()                                                                                                                                                                                                                                                                                                                                         
+        vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()          
+        samples_dict[f'fix_{len(index_fix)}'] = samples_fix                                                                                                                                                                                                                                                                                                                     
         # plot     
         index_opt = np.where(vals_opt.flatten() >= 0.382)[0]
         samples_opt_no_fix = samples_opt[:, index_opt]
@@ -386,9 +424,10 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
     # cal_prop_optimal(vals_dict, dot_vals, fig_path)
     # Calculate the stats of objectives vs. Parameter Fixing
     df_stats = cal_stats(vals_opt, vals_dict, re_eval)
-    df_stats.to_csv(f'{fig_path}/F_stats.csv')
-    # pdf plot
-    # plot_pdf(vals_opt, vals_dict, re_eval, fig_path)
+    # df_stats.to_csv(f'{fig_path}/F_stats.csv')
+
+    fig = corner_pot(samples_dict, vals_dict, samples_opt_no_fix, vals_opt_no_fix.flatten(), param_names, index_fix, y_lab='F')
+    plt.savefig(f'{fig_path}/corner_plot_sub.png', dpi=300)
 
     # Box plot
     # normalize the vals in vals_dict so as to well distinguish the feasible F.
@@ -396,9 +435,10 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
     for key, v in vals_dict.items():
         vals_dict_norm[key] = 1 / (2 - v)
     vals_opt_norm = 1 / (2 - vals_opt)
-    box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, re_eval)
+    # box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, re_eval)
     return dot_vals, vals_dict, index_fix
  # END fix_plot()
+
 
 # import GP
 if __name__ == '__main__':
@@ -426,17 +466,17 @@ if __name__ == '__main__':
     #     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
     # Calculate results with and create plots VS fixing parameters
-    fsave = fpath + 'analytic-sa/'
+    fsave = fpath + 'sampling-sa/'
     norm_y = False
     vals_fix_dict = {}
     # dot_vals, vals_fix_dict['full_mean'] = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
     #     plot_range='full_mean', re_eval=True, norm_y = True)
     dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, variable_temp, fsave, param_names, 
-        ind_vars, 'analytic', plot_range='sub_mean', re_eval=True, norm_y = norm_y)
+        ind_vars, 'sampling', plot_range='sub_mean', re_eval=True, norm_y = norm_y)
     _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
-        ind_vars, 'analytic', plot_range='sub_rand', re_eval=True, norm_y = norm_y)
+        ind_vars, 'sampling', plot_range='sub_rand', re_eval=True, norm_y = norm_y)
     _, vals_fix_dict['sub_max'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
-        ind_vars, 'analytic', plot_range='sub_max', re_eval=True, norm_y = norm_y)
+        ind_vars, 'sampling', plot_range='sub_max', re_eval=True, norm_y = norm_y)
 
     # validation plot
     # vali_samples = vali_samples_subreg(gp, variable_temp, 20000)
