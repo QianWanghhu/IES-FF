@@ -67,7 +67,6 @@ def dotty_plot(x_samples, y_vals, x_opt, y_opt, param_names, y_lab='SSE', orig_x
 
     return fig
 
-
 def define_constants(x, num_vars, stats = np.median):
     """Return default values of the parameters to fix
     Parameters:
