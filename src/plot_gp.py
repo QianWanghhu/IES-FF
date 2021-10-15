@@ -282,20 +282,18 @@ def spr_coef(dot_samples, dot_vals, fsave):
     coef_dict.to_csv(fsave+'spearman_coeff.csv')
     p_dict.to_csv(fsave+'spearman_p.csv')
 
-def corner_pot(samples_dict, vals_dict, x_opt, y_opt, param_names, index_fix, y_lab='F'):
+def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
     """
     Create dotty plots for the model inputs and outputs. 
     Only part of the results will be plotted and shown in the paper due to the space available in a page.
     Parameteres:
     ============
-    x_samples: np.ndarray, input sample set of the shape D * N where D is the number of parameters and N is the sample size;
-    y_vals: np.ndarray, outputs corresponding to the x_samples and of the shape N * 1
+    samples_dict: dict, collection of parameter samples with and without FF;
+    vals_dict: dict
     x_opt: np.ndarray, parameter data points resulting in the selected optima
     y_opt: np.ndarray, output values of the selected optima corresponding to x_opt
-    param_names: list, parameter names
-    orig_x_opt: np.ndarray, parameter data points resulting in the selected optima 
-                and the selection is based on outputs without factor fixing.
-    orig_y_opt: np.ndarray, output values of the selected optima corresponding to x_opt
+    index_fix: list, the index of parameters ranked according to sensitivities.
+    y_lab: str, the label of y-axis
     
     Returns:
     ========
