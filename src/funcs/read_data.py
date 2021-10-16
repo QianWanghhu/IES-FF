@@ -14,7 +14,7 @@ def file_settings():
     model_ts_reduced = f'{model_dir}samples_adjust.csv'
     
     param_full = f'{input_dir}Parameters.csv'
-    param_reduced = f'{input_dir}Parameters_PCE.csv'
+    param_reduced = f'{input_dir}Parameters-PCE.csv'
     return [model_dir, input_dir, model_ts_full, model_ts_reduced, param_full, \
         param_reduced]
 # END file_settings()
@@ -85,8 +85,9 @@ def variables_prep(filename, product_uniform=False, dummy=False):
     # import parameter inputs and generate the dataframe of analytical ratios between sensitivity indices
     if (product_uniform is False) or (product_uniform == 'uniform'):    
         ranges = np.loadtxt(
-            filename,delimiter=",",usecols=[2,3],skiprows=1).flatten()
+            filename,delimiter=",",usecols=[3,4],skiprows=1).flatten()
         univariate_variables = [uniform(ranges[2*ii],ranges[2*ii+1]-ranges[2*ii]) for ii in range(0, ranges.shape[0]//2)]
+        # breakpoint()    
     else:
         param_adjust = pd.read_csv(filename)
         beta_index = param_adjust[param_adjust['distribution']== 'beta'].index.to_list()
@@ -108,6 +109,6 @@ def variables_prep(filename, product_uniform=False, dummy=False):
     if dummy == True: univariate_variables.append(uniform(0, 1))
 
     variable = pya.IndependentMultivariateRandomVariable(univariate_variables)
-    return variable
+    return univariate_variables, variable
     
 #END variables_prep()
