@@ -2,9 +2,7 @@
 import numpy as np
 import pandas as pd
 
-# Call the function to run DIN model with selected samples
 # Note: do save the results while running the original model.
-#!/usr/bin/env python
 from multiprocessing import Pool
 import numpy as np
 import os
@@ -43,14 +41,13 @@ mpl.rcParams['text.latex.preamble'] = \
 # Create the copy of models and veneer list
 project_name = 'MW_BASE_RC10.rsproj'
 veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-first_port=15000; num_copies = 8
+first_port=15000; num_copies = 1
 _, things_to_record, _, _, _ = modeling_settings()
 processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
 
 vs_list = vs_settings(ports, things_to_record)
 # obtain the initial values of parameters 
 initial_values = obtain_initials(vs_list[0])
-
 def run_source_lsq(vars, vs_list=vs_list):
     """
     Script used to run_source and return the output file.
@@ -59,7 +56,7 @@ def run_source_lsq(vars, vs_list=vs_list):
     from funcs.modeling_funcs import modeling_settings, generate_observation_ensemble
     import spotpy as sp
     print('Read Parameters')
-    parameters = pd.read_csv('../data/Parameters-PCE.csv', index_col='Index')
+    parameters = pd.read_csv('../data/Parameters-PCE2.csv', index_col='Index')
 
     # Use annual or monthly loads
     def timeseries_sum(df, temp_scale = 'annual'):
@@ -118,16 +115,17 @@ def run_source_lsq(vars, vs_list=vs_list):
     
     # loop over the vars and try to use parallel     
     parameter_df = pd.DataFrame(index=np.arange(vars.shape[1]), columns=parameters.Name_short)
-    for i in range(vars_copy.shape[1]):
-        parameter_df.iloc[i] = vars_copy[:, i]
+    for i in range(vars.shape[1]):
+        parameter_df.iloc[i] = vars[:, i]
 
     # set the time period of the results
     retrieve_time = [pd.Timestamp('2009-07-01'), pd.Timestamp('2018-06-30')]
 
     # define the modeling period and the recording variables
     _, _, criteria, start_date, end_date = modeling_settings()
+    initial_values = obtain_initials(vs_list[0])
     din = generate_observation_ensemble(vs_list, 
-        criteria, start_date, end_date, parameter_df, retrieve_time)
+        criteria, start_date, end_date, parameter_df, retrieve_time, initial_values)
 
     # obtain the sum at a given temporal scale
     din_126001A = timeseries_sum(din, temp_scale = 'annual')
@@ -146,7 +144,7 @@ def run_source_lsq(vars, vs_list=vs_list):
     train_iteration = np.append(train_iteration, obj_pbias.T, axis=0)
     train_iteration = np.append(train_iteration, obj.T, axis=0)
     # save sampling results of NSE and PBIAS
-    train_file = 'training_samples.txt'
+    train_file = 'outlier_samples.txt'
     if os.path.exists(train_file):
         train_samples = np.loadtxt(train_file)
         train_samples = np.append(train_samples, train_iteration, axis=1)
@@ -159,6 +157,7 @@ def run_source_lsq(vars, vs_list=vs_list):
 # END run_source_lsq()
 
 # Obtain samples satisfying the criteria
+# Call the function to run DIN model with selected samples
 fdir = '../output/gp_run_0816/sampling-sa/fix_max_subreg/'
 samples = np.loadtxt(f'{fdir}samples_fix_8.txt')
 values = np.loadtxt(f'{fdir}values_fix_8.txt')
