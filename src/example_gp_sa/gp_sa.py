@@ -271,7 +271,7 @@ def bayesian_inference_example():
     init_scale = 1 # used to define length_scale for the kernel
     num_vars = variables.nvars
     num_candidate_samples = 10000
-    num_new_samples = np.asarray([20]+[10]*6+[25]*6)#+[50]*6)
+    num_new_samples = np.asarray([20]+[10]*6+[25]*6+[50]*2)#+[50]*6)
 
     nvalidation_samples = 10000
 
@@ -361,7 +361,7 @@ def bayesian_inference_example():
         data = np.load(filename)
         nsamples, errors = data['nsamples'], data['errors']
         temper_params, cond_nums = data['temper_params'], data['cond_nums']
-        # breakpoint()
+        print(f'Errors: {errors}')
         axs[0].loglog(nsamples, errors, ls=ls, label=label)
         axs[1].loglog(nsamples, cond_nums, ls=ls, label=label)
         axs[2].semilogy(np.arange(nsamples.shape[0]),
