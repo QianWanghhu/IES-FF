@@ -31,67 +31,21 @@ from funcs.utils import partial_rank, return_sa
 from gp_pce_model import *
 
 
-def plot(gp, fpath, plot_range='full', save_vali=False):
-    """
-    Function used to plot the figures of GP validation.
-    Parameters:
-    ===========
-    gp: Gaussian Process object
-    fpath: str, path to save figures
-    plot_range: str, defining the set of validation samples to use.
-                Use global samples if "full", else local. Default is "full".
-    save_vali: Bool, save figures if true. Default is False.
-
-    """
-    gp1 = pickle.load(open(f'../output/gp_run_0816/gp_0.pkl', "rb"))
-    plot_range = 'sub'
-    x1_training = gp1.X_train_
-    y1_training = gp1.y_train_
-    if plot_range == 'full':
-        y_hat = gp.predict(x1_training)[50:150]
-        y_eval = y1_training[50:150]
-    else:
-        y_hat = gp.predict(x1_training)
-        x_hat = x1_training[np.where(y_hat>0)[0][0:100], :]
-        y_eval = y1_training[y_hat>0][0:100]
-        y_hat = y_hat[y_hat>0][0:100]
-
-    l2 = np.linalg.norm(y_hat.flatten() - y_eval.flatten()) / np.linalg.norm(y_eval.flatten())
-    r2 = 1 - l2 ** 2
-    rmse = np.linalg.norm(y_eval - y_eval.mean(), ord=2) / y_eval.shape[0] ** 0.5
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    ax.plot(y_eval.flatten(), y_hat.flatten(), linestyle='', marker='o', ms=8)
-    ax.set_xlabel('Modeled F')
-    ax.set_ylabel('GP simulation')
-    y_eval_opt = y_eval[y_eval>0.382]
-    y_hat_opt = y_hat[y_eval>0.382]
-    ax.plot(y_eval_opt.flatten(), y_hat_opt.flatten(), linestyle='', 
-        marker='o', color='darkorange', alpha=0.7, ms=8)
-    ax.plot(np.linspace(y_eval.min(), 0.8, 100), np.linspace(y_eval.min(), 0.8, 100), 
-        linestyle='--', color='slategrey', alpha=0.5)
-    # ax.text(-950, -100, r'$R^2 = %.3f$'%r2)
-    # ax.text(-950, -200, r'$RMSE = %.3f$'%rmse)
-    ax.text(0.05, 0.75, r'$R^2 = %.3f$'%r2)
-    ax.text(0.05, 0.65, r'$RMSE = %.3f$'%rmse)
-    # plt.savefig(f'{fpath}figs/gpr_validation_{plot_range}_range_text.png', dpi=300)
-
-    # save validation samples
-    if save_vali:
-        vali_samples = np.append(x_hat, y_eval.reshape(y_eval.shape[0], 1), axis=1)
-        np.savetxt('validation_samples.txt', vali_samples)
-# END plot()     
-
-def vali_samples_subreg(gp, variable, num_candidate_samples=20000):
+def vali_samples_subreg(gp, variable, variable_const, num_candidate_samples=20000):
     """
     Function used to generate validation samples.
     """
     candidates_samples = generate_gp_candidate_samples(gp.X_train_.shape[1], 
         num_candidate_samples = num_candidate_samples, 
             generate_random_samples=None, variables=variable)
+
+    candidates_samples_const = generate_gp_candidate_samples(gp.X_train_.shape[1], 
+        num_candidate_samples = num_candidate_samples, 
+            generate_random_samples=None, variables=variable_const)
     
-    y_pred = gp.predict(candidates_samples.T)
-    samples_vali_subreg1 = candidates_samples[:, np.where(y_pred>0.382)[0][0:20]]
-    samples_vali_subreg2 = candidates_samples[:, np.where(y_pred>0)[0]]
+    y_pred_const = gp.predict(candidates_samples_const.T)
+    samples_vali_subreg1 = candidates_samples_const[:, np.where(y_pred_const>0.382)[0][0:20]]
+    samples_vali_subreg2 = candidates_samples_const[:, np.where(y_pred_const>0)[0]]
     y_sub1 = gp.predict(samples_vali_subreg2.T)
     samples_vali_subreg2 = samples_vali_subreg2[:, np.where(y_sub1<=0.382)[0][0:80]]
     samples_vali_full = candidates_samples[:, 0:100]
@@ -101,7 +55,8 @@ def vali_samples_subreg(gp, variable, num_candidate_samples=20000):
     vali_samples[0:13, 100:200] = samples_vali_full
     vali_samples[13, 0:20] = gp.predict(samples_vali_subreg1.T).flatten()
     vali_samples[13, 20:100] = gp.predict(samples_vali_subreg2.T).flatten()
-    vali_samples[13, 100:200] = y_pred[0:100].flatten()
+    y_pred_full = gp.predict(candidates_samples.T)
+    vali_samples[13, 100:200] = y_pred_full[0:100].flatten()
     return vali_samples
 # END vali_samples_subreg()
 
@@ -119,7 +74,8 @@ def ratio_subreg(gp):
     ration_df: pd.DataFrame, dataframe of the ratios at each iteration.
     """
     y_training = gp.y_train_
-    num_new_samples = np.asarray([0]+[20]+[8]*10+[16]*20+[24]*16+[40]*14)
+    # num_new_samples = np.asarray([0]+[20]+[8]*10+[16]*20+[24]*16+[40]*14)
+    num_new_samples = np.asarray([20]+[8]*10+[16]*20+[24]*20+[40]*18)
     num_samples = np.cumsum(num_new_samples)
     ratio_samples = np.zeros(shape=(num_new_samples.shape[0]-2, 2))
     ratio_sum = 0
@@ -248,7 +204,7 @@ def plot_pdf(vals_opt, vals_dict, re_eval, fig_path):
         axes[ii].axvline(0.382,  color='grey', linestyle='--', alpha=0.7)
     plt.savefig(f'{fig_path}/objective_dist.png', dpi=300)
 
-def box_plot(vals_dict, vals_opt, num_fix, fig_path):
+def box_plot(vals_dict, vals_opt, num_fix, fig_path, y_label='1/(2-F)', y_norm=True):
     """
     Used to generate the boxplot of objective values.
     """
@@ -257,17 +213,23 @@ def box_plot(vals_dict, vals_opt, num_fix, fig_path):
     df['fix_0'] = vals_opt.flatten()
     df.columns = [*num_fix, 0]
     df = df[[0, *num_fix]]
-    # if re_eval:
-    #     df_filter = df.where(df>0.382)
-    # else:
-    df_filter = df
+    if y_norm:
+        df_filter = df
+    else:
+        
+        df_filter = df.where(df>0.382)
 
     ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis=0.5)
-    ax.axhline(1/(2 - 0.382),  color='orange', linestyle='--', alpha=1 , linewidth=1)
+    if y_norm == True:
+        ax.axhline(1/(2 - 0.382),  color='orange', linestyle='--', alpha=1 , linewidth=1)
+        fig_name = 'boxplot_full_norm'
+    else:
+        ax.axhline(0.382,  color='orange', linestyle='--', alpha=1 , linewidth=1)
+        fig_name = 'boxplot_feasible'
     ax.set_xlabel('Number of fixed parameters')
-    ax.set_ylabel('1/(2-F)')
+    ax.set_ylabel(y_label)
     # ax.set_ylim(0.2, 1.4)
-    plt.savefig(f'{fig_path}/boxplot_full_norm.png', dpi=300)
+    plt.savefig(f'{fig_path}/{fig_name}.png', dpi=300)
 
 def spr_coef(dot_samples, dot_vals, fsave):
     """
@@ -343,7 +305,7 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
     """
     from funcs.utils import fix_sample_set, dotty_plot
 
-    dot_fn = f'{file_settings()[0]}gp_run_0816/dotty_samples.txt'
+    dot_fn = f'{file_settings()[0]}gp_run_1024/dotty_samples.txt'
     if not os.path.exists(dot_fn):
         dot_samples = generate_independent_random_samples(variables, 200000)
         np.savetxt(dot_fn, dot_samples)
@@ -373,10 +335,10 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
     x_default = np.append(x_default, y_default)
     if not os.path.exists(fig_path):
         os.makedirs(fig_path)
-    # np.savetxt(f'{fig_path}/fixed_values.txt', x_default)
+    np.savetxt(f'{fig_path}/fixed_values.txt', x_default)
 
     # calculate / import parameter rankings
-    from sensitivity import sa_gp
+    from sensitivity_settings import sa_gp
     if sa_cal_type == 'analytic':
         vars = variables_full
     else:
@@ -397,6 +359,7 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
         print(f'index: {index_fix}')
         samples_fix = fix_sample_set(index_fix, samples_opt, x_default)
         vals_fix = np.zeros_like(vals_opt)
+        
     
         # calculate with surrogate 
         if re_eval == True:
@@ -404,6 +367,10 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
                 vals_fix[10000*ii:(ii+1)*10000] = gp.predict(samples_fix[:, 10000*ii:(ii+1)*10000].T)
         else:
             vals_fix = gp.predict(samples_fix.T)
+
+        if num_fix[-1] == 2:
+           np.savetxt(f'{fig_path}/samples_fix_{num_fix[-1]}.txt', samples_fix) 
+           np.savetxt(f'{fig_path}/values_fix_{num_fix[-1]}.txt', vals_fix)
 
         # select points statisfying the optima
         index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
@@ -415,16 +382,17 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
         index_opt = np.where(vals_opt.flatten() >= 0.382)[0]
         samples_opt_no_fix = samples_opt[:, index_opt]
         vals_opt_no_fix = vals_opt[index_opt]
-        # fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
-        #     param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
-        # plt.savefig(f'{fig_path}/{len(index_fix)}.png', dpi=300)
+        fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
+            param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
+        plt.savefig(f'{fig_path}/{len(index_fix)}.png', dpi=300)
 
-    # cal_prop_optimal(vals_dict, dot_vals, fig_path)
+    cal_prop_optimal(vals_dict, dot_vals, fig_path)
     # Calculate the stats of objectives vs. Parameter Fixing
     df_stats = cal_stats(vals_opt, vals_dict, re_eval)
-    # df_stats.to_csv(f'{fig_path}/F_stats.csv')
+    df_stats.to_csv(f'{fig_path}/F_stats.csv')
 
-    fig = corner_pot(samples_dict, vals_dict, samples_opt_no_fix, vals_opt_no_fix.flatten(), param_names, index_fix, y_lab='F')
+    # corner plot
+    fig = corner_pot(samples_dict, vals_dict, samples_opt_no_fix, vals_opt_no_fix.flatten(), index_fix, y_lab='F')
     plt.savefig(f'{fig_path}/corner_plot_sub.png', dpi=300)
 
     # Box plot
@@ -433,14 +401,15 @@ def fix_plot(gp, variables, fsave, param_names, ind_vars, sa_cal_type,
     for key, v in vals_dict.items():
         vals_dict_norm[key] = 1 / (2 - v)
     vals_opt_norm = 1 / (2 - vals_opt)
-    # box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, re_eval)
+    box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, y_label='1/(2-F)', y_norm=True)
+    box_plot(vals_dict, vals_opt, num_fix, fig_path, y_label='F', y_norm=False)
     return dot_vals, vals_dict, index_fix
  # END fix_plot()
 
 
 # import GP
 if __name__ == '__main__':
-    fpath = '../output/gp_run_0816/'
+    fpath = '../output/gp_run_1024/'
     gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
     x_training = gp.X_train_
     y_training = gp.y_train_
@@ -464,19 +433,75 @@ if __name__ == '__main__':
     #     df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
     # Calculate results with and create plots VS fixing parameters
-    fsave = fpath + 'sampling-sa/'
-    norm_y = False
-    vals_fix_dict = {}
-    # dot_vals, vals_fix_dict['full_mean'] = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
-    #     plot_range='full_mean', re_eval=True, norm_y = True)
-    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, variable_temp, fsave, param_names, 
-        ind_vars, 'sampling', plot_range='sub_mean', re_eval=True, norm_y = norm_y)
-    _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
-        ind_vars, 'sampling', plot_range='sub_rand', re_eval=True, norm_y = norm_y)
-    _, vals_fix_dict['sub_max'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
-        ind_vars, 'sampling', plot_range='sub_max', re_eval=True, norm_y = norm_y)
+    # fsave = fpath + 'analytic-sa/'
+    # norm_y = False
+    # vals_fix_dict = {}
+    # # dot_vals, vals_fix_dict['full_mean'] = fix_plot(gp, variable_temp, fsave, param_names, ind_vars, 'sampling', 
+    # #     plot_range='full_mean', re_eval=True, norm_y = True)
+    # dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, variable_temp, fsave, param_names, 
+    #     ind_vars, 'analytic', plot_range='sub_mean', re_eval=True, norm_y = norm_y)
+    # _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
+    #     ind_vars, 'analytic', plot_range='sub_rand', re_eval=True, norm_y = norm_y)
+    # _, vals_fix_dict['sub_max'], _  = fix_plot(gp, variable_temp, fsave, param_names, 
+    #     ind_vars, 'analytic', plot_range='sub_max', re_eval=True, norm_y = norm_y)
+
 
     # validation plot
-    # vali_samples = vali_samples_subreg(gp, variable_temp, 20000)
-    # np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
-    # plot(gp, fpath, plot_range='sub', save_vali=False)
+    vali_samples = vali_samples_subreg(gp, variables_full, variable_temp, 20000)
+    np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
+
+
+
+
+def plot(gp, vali_samples, fpath, plot_range='full', save_vali=False):
+    """
+    Function used to plot the figures of GP validation.
+    Parameters:
+    ===========
+    gp: Gaussian Process object
+    fpath: str, path to save figures
+    plot_range: str, defining the set of validation samples to use.
+                Use global samples if "full", else local. Default is "full".
+    save_vali: Bool, save figures if true. Default is False.
+
+    """
+    if plot_range == 'full':
+        y_hat = gp.predict(vali_samples[0:13, 100:].T)
+        y_eval = vali_samples[13, 100:]
+    else:
+        y_hat = gp.predict(vali_samples[0:13, 0:100].T)
+        y_eval = vali_samples[13, 0:100]    
+
+    l2 = np.linalg.norm(y_hat.flatten() - y_eval.flatten()) / np.linalg.norm(y_eval.flatten())
+    r2 = 1 - l2 ** 2
+    rmse = np.linalg.norm(y_eval - y_eval.mean(), ord=2) / y_eval.shape[0] ** 0.5
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    ax.plot(y_eval.flatten(), y_hat.flatten(), linestyle='', marker='o', ms=8)
+    ax.set_xlabel('Modeled F')
+    ax.set_ylabel('GP simulation')
+    y_eval_opt = y_eval[y_eval>0.382]
+    y_hat_opt = y_hat[y_eval>0.382]
+    ax.plot(y_eval_opt.flatten(), y_hat_opt.flatten(), linestyle='', 
+        marker='o', color='darkorange', alpha=0.7, ms=8)
+    ax.plot(np.linspace(y_eval.min(), 0.8, 100), np.linspace(y_eval.min(), 0.8, 100), 
+        linestyle='--', color='slategrey', alpha=0.5)
+    # ax.text(-950, -100, r'$R^2 = %.3f$'%r2)
+    # ax.text(-950, -200, r'$RMSE = %.3f$'%rmse)
+    ax.text(0.05, 0.75, r'$R^2 = %.3f$'%r2)
+    ax.text(0.05, 0.65, r'$RMSE = %.3f$'%rmse)
+    # plt.savefig(f'{fpath}figs/gpr_validation_{plot_range}_range_text.png', dpi=300)
+# END plot()     
+
+fpath = '../output/gp_run_1024/'
+gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
+# x_training = gp.X_train_
+# y_training = gp.y_train_
+
+vali_samples = np.loadtxt(fpath+'vali_samples.txt')[0:14, :]
+plot(gp, vali_samples, fpath, plot_range='full', save_vali=False)
+
+# vali_x = vali_samples[0:13, :]
+# vali_y = vali_samples[13, :]
+# vali_y_hat = gp.predict(vali_x.T)
+# plt.scatter(vali_y[0:], vali_y_hat[0:])
+# # plt.scatter(vali_y[100:], vali_y_hat[100:])
