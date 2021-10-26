@@ -28,7 +28,7 @@ mpl.rcParams['font.size'] = 16
 mpl.rcParams['lines.linewidth'] = 3
 mpl.rcParams['text.usetex'] = False  # use latex for all text handling
 mpl.rcParams['savefig.bbox'] = 'tight'
-mpl.rcParams['savefig.format'] = 'pdf'  # gives best resolution plots
+mpl.rcParams['savefig.format'] = 'jpg'  # gives best resolution plots
 mpl.rcParams['axes.labelsize'] = 20
 mpl.rcParams['axes.titlesize'] = 20
 mpl.rcParams['xtick.labelsize'] = 20
@@ -158,17 +158,27 @@ def run_source_lsq(vars, vs_list=vs_list):
 
 # Obtain samples satisfying the criteria
 # Call the function to run DIN model with selected samples
-fdir = '../output/gp_run_0816/sampling-sa/fix_max_subreg/'
-samples = np.loadtxt(f'{fdir}samples_fix_8.txt')
-values = np.loadtxt(f'{fdir}values_fix_8.txt')
-index_filter = np.where(values>1.0)[0]
-samples_filter = samples[:, index_filter]
-values_filter = values[index_filter]
-np.savetxt(f'{fdir}samples_fix_8_filter.txt', samples_filter)
-np.savetxt(f'{fdir}values_fix_8_filter.txt', values_filter)
-
-# run the main model
-obj_model = run_source_lsq(samples_filter, vs_list=vs_list)
-np.savetxt('outlier_samples.txt', obj_model)
+fdir = '../output/gp_run_0816/sampling-sa/fix_mean_subreg/'
+samples = np.loadtxt(f'{fdir}samples_fix_2.txt')
+values = np.loadtxt(f'{fdir}values_fix_2.txt')
 
 # Plot the results comparing GP and the original model outputs
+if os.path.exists(f'{fdir}values_fix_2_filter.txt') and \
+    (os.path.exists(f'{fdir}outlier_samples.txt')):
+    y_outlier_gp = np.loadtxt(f'{fdir}values_fix_2_filter.txt')
+    y_outlier_true = np.loadtxt(f'{fdir}outlier_samples.txt')[-1, :]
+else:
+    index_filter = np.where((values>0.382) & (values<1))[0]
+    samples_filter = samples[:, index_filter]
+    values_filter = values[index_filter]
+    np.savetxt(f'{fdir}samples_fix_2_filter.txt', samples_filter)
+    np.savetxt(f'{fdir}values_fix_2_filter.txt', values_filter)
+    # run the main model
+    obj_model = run_source_lsq(samples_filter, vs_list=vs_list)
+    np.savetxt('outlier_samples.txt', obj_model)
+
+y_residuals = y_outlier_true.flatten() - y_outlier_gp[0:100].flatten()
+ax = plt.scatter(y_outlier_true, y_residuals)
+# plt.plot(np.arange(0, 10, 1)/10, np.arange(0, 10, 1)/10, linestyle='--')
+plt.xlabel('Model output')
+plt.ylabel('GP output')
