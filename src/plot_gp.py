@@ -184,7 +184,6 @@ def box_plot(vals_dict, vals_opt, num_fix, fig_path,fig_name, y_label='1/(2-F)',
     if y_norm:
         df_filter = df
     else:
-        
         df_filter = df.where(df>0.382)
 
     ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis=0.5)
@@ -280,7 +279,23 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     dot_vals = np.zeros(shape=(dot_samples.shape[1], 1))
     for ii in range(20):
         dot_vals[10000*ii:(ii+1)*10000] = gp.predict(dot_samples[:, 10000*ii:(ii+1)*10000].T)
-    
+
+    # Get the feasible region
+    x_temp_select = dot_samples.T[np.where(dot_vals>0.382)[0], :]
+    x_temp_range = x_temp_select.max(axis=0)
+    breakpoint()
+    univariable_feasible = [stats.uniform(0, x_temp_range[ii]) for ii in range(0, x_temp_range.shape[0])]
+    variable_feasible = pyapprox.IndependentMultivariateRandomVariable(univariable_feasible)
+    dot_fn_feasible = f'{file_settings()[0]}gp_run_1024/dotty_samples_feasible.txt'
+    if not os.path.exists(dot_fn_feasible):
+        dot_samples_feasible = generate_independent_random_samples(variable_feasible, 200000)
+        np.savetxt(dot_fn_feasible, dot_samples_feasible)
+    else:
+        dot_samples_feasible = np.loadtxt(dot_fn_feasible)
+    dot_vals_feasible = np.zeros(shape=(dot_samples_feasible.shape[1], 1))
+    for ii in range(20):
+        dot_vals_feasible[10000*ii:(ii+1)*10000] = gp.predict(dot_samples_feasible[:, 10000*ii:(ii+1)*10000].T)
+        
     # Whether to re-evaluate the optimal values.
     if re_eval:
         samples_opt = dot_samples 
@@ -317,6 +332,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     num_fix = []
     vals_dict = {}
     samples_dict = {}
+    vals_dict_feasible = {}
     index_fix = np.array([], dtype=int)
     for ii in range(max(index_sort.keys()), -1, -1):
         index_fix = np.append(index_fix, index_sort[ii])
@@ -325,49 +341,57 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
         print(f'index: {index_fix}')
         samples_fix = fix_sample_set(index_fix, samples_opt, x_default)
         vals_fix = np.zeros_like(vals_opt)
+        dot_samples_feasible_fix = fix_sample_set(index_fix, dot_samples_feasible, x_default)
+        vals_fix_feasible = np.zeros_like(dot_vals_feasible)
     
         # calculate with surrogate 
         if re_eval == True:
             for ii in range(20):
                 vals_fix[10000*ii:(ii+1)*10000] = gp.predict(samples_fix[:, 10000*ii:(ii+1)*10000].T)
+                vals_fix_feasible[10000*ii:(ii+1)*10000] = gp.predict(dot_samples_feasible_fix[:, 10000*ii:(ii+1)*10000].T)
         else:
             vals_fix = gp.predict(samples_fix.T)
 
-        if num_fix[-1] == 2:
-           np.savetxt(f'{fig_path}/samples_fix_{num_fix[-1]}.txt', samples_fix) 
-           np.savetxt(f'{fig_path}/values_fix_{num_fix[-1]}.txt', vals_fix)
+        # if num_fix[-1] == 2:
+        #    np.savetxt(f'{fig_path}/samples_fix_{num_fix[-1]}.txt', samples_fix) 
+        #    np.savetxt(f'{fig_path}/values_fix_{num_fix[-1]}.txt', vals_fix)
 
         # select points statisfying the optima
         index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
         samples_opt_fix = samples_fix[:, index_opt_fix]
         vals_opt_fix = vals_fix[index_opt_fix]
         vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()          
-        samples_dict[f'fix_{len(index_fix)}'] = samples_fix                                                                                                                                                                                                                                                                                                                     
+        samples_dict[f'fix_{len(index_fix)}'] = samples_fix
+        vals_dict_feasible[f'fix_{len(index_fix)}'] = vals_fix_feasible.flatten()                                                                                                                                                                                                                                                                                                        
         # plot     
         index_opt = np.where(vals_opt.flatten() >= 0.382)[0]
         samples_opt_no_fix = samples_opt[:, index_opt]
         vals_opt_no_fix = vals_opt[index_opt]
-        fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
-            param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
-        plt.savefig(f'{fig_path}/{len(index_fix)}_not_eval.png', dpi=300)
+        # fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
+        #     param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
+        # plt.savefig(f'{fig_path}/{len(index_fix)}_not_eval.png', dpi=300)
 
     cal_prop_optimal(vals_dict, dot_vals, fig_path)
     # Calculate the stats of objectives vs. Parameter Fixing
     df_stats = cal_stats(vals_opt, vals_dict, re_eval)
-    df_stats.to_csv(f'{fig_path}/F_stats.csv')
+    # df_stats.to_csv(f'{fig_path}/F_stats.csv')
 
     # corner plot
-    fig = corner_pot(samples_dict, vals_dict, samples_opt_no_fix, vals_opt_no_fix.flatten(), index_fix, y_lab='F')
-    plt.savefig(f'{fig_path}/corner_plot_sub_not_eval.png', dpi=300)
+    # fig = corner_pot(samples_dict, vals_dict, samples_opt_no_fix, vals_opt_no_fix.flatten(), index_fix, y_lab='F')
+    # plt.savefig(f'{fig_path}/corner_plot_sub_not_eval.png', dpi=300)
 
     # Box plot
     # normalize the vals in vals_dict so as to well distinguish the feasible F.
     vals_dict_norm = {}
+    vals_dict_feasible_norm = {}
     for key, v in vals_dict.items():
         vals_dict_norm[key] = 1 / (2 - v)
+        vals_dict_feasible_norm[key] = 1 / (2 - vals_dict_feasible[key])
     vals_opt_norm = 1 / (2 - vals_opt)
-    box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, 'boxplot_full_norm', y_label='1/(2-F)', y_norm=True)
-    box_plot(vals_dict, vals_opt, num_fix, fig_path, 'boxplot_feasible', y_label='F', y_norm=False)
+    vals_feasible_norm = 1 / (2 - dot_vals_feasible)
+    # box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, 'boxplot_full_norm', y_label='1/(2-F)', y_norm=True)
+    box_plot(vals_dict_feasible_norm, vals_feasible_norm, num_fix, fig_path, 'boxplot_feasible_norm', y_label='1/(2-F)', y_norm=True)
+    # box_plot(vals_dict, vals_opt, num_fix, fig_path, 'boxplot_feasible', y_label='F', y_norm=False)
     return dot_vals, vals_dict, index_fix
  # END fix_plot()
 
@@ -385,7 +409,7 @@ def run_fix():
     univariable_temp = [stats.uniform(0, x_range[ii]) for ii in range(0, x_range.shape[0])]
     variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
 
-    # visualization the effects of factor fixing
+    # visualization of the effects of factor fixing
     # define the variables for PCE
     param_file = file_settings()[-1]
     ind_vars, variables_full = variables_prep(param_file, product_uniform='uniform', dummy=False)
@@ -398,15 +422,15 @@ def run_fix():
         df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
     # Calculate results with and create plots VS fixing parameters
-    fsave = fpath + 'analytic-sa/'
+    fsave = fpath + 'sampling-sa/'
     norm_y = False
     vals_fix_dict = {}
     dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names, 
-        ind_vars, 'analytic', variables_full, variable_temp, plot_range='sub_mean', re_eval=False, norm_y = norm_y)
+        ind_vars, 'sampling', variables_full, variable_temp, plot_range='sub_mean', re_eval=True, norm_y = norm_y)
     _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, fsave, param_names, 
-        ind_vars, 'analytic', variables_full, variable_temp, plot_range='sub_rand', re_eval=False, norm_y = norm_y)
+        ind_vars, 'sampling', variables_full, variable_temp, plot_range='sub_rand', re_eval=True, norm_y = norm_y)
     _, vals_fix_dict['sub_max'], _  = fix_plot(gp, fsave, param_names, 
-        ind_vars, 'analytic', variables_full, variable_temp, plot_range='sub_max', re_eval=False, norm_y = norm_y)
+        ind_vars, 'sampling', variables_full, variable_temp, plot_range='sub_max', re_eval=True, norm_y = norm_y)
     # END run_fix()
 
 
