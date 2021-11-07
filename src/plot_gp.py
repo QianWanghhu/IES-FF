@@ -276,10 +276,11 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
         np.savetxt(dot_fn, dot_samples)
     else:
         dot_samples = np.loadtxt(dot_fn)
+
     dot_vals = np.zeros(shape=(dot_samples.shape[1], 1))
     for ii in range(10):
         dot_vals[10000*ii:(ii+1)*10000] = gp.predict(dot_samples[:, 10000*ii:(ii+1)*10000].T)
-
+    
     # Whether to re-evaluate the optimal values.
     if re_eval:
         samples_opt = dot_samples 
@@ -287,9 +288,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     else:
         samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
         vals_opt = dot_vals[dot_vals>0.382]
-    # Calculate the Spearman correlation between parameters
-    spr_coef(dot_samples, dot_vals, fsave)
-    
+
     # Choose the fixed values
     print(f'Number of values beyond the threshold: {samples_opt.shape[1]}')
     x_default, fig_path = choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals)
@@ -299,7 +298,6 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     x_default = np.append(x_default, y_default)
     if not os.path.exists(fig_path):
         os.makedirs(fig_path)
-    np.savetxt(f'{fig_path}/fixed_values_{plot_range}.txt', x_default)
 
     # calculate / import parameter rankings
     from sensitivity_settings import sa_gp
@@ -331,32 +329,46 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
         else:
             vals_fix = gp.predict(samples_fix.T)
 
-        if num_fix[-1] == 2:
-           np.savetxt(f'{fig_path}/samples_fix_{num_fix[-1]}_{param_range}.txt', samples_fix) 
-           np.savetxt(f'{fig_path}/values_fix_{num_fix[-1]}_{param_range}.txt', vals_fix)
+        # if num_fix[-1] == 2:
+        #    np.savetxt(f'{fig_path}/samples_fix_{num_fix[-1]}_{param_range}.txt', samples_fix) 
+        #    np.savetxt(f'{fig_path}/values_fix_{num_fix[-1]}_{param_range}.txt', vals_fix)
 
         # select points statisfying the optima
-        index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
-        samples_opt_fix = samples_fix[:, index_opt_fix]
-        vals_opt_fix = vals_fix[index_opt_fix]
-        vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()          
-        samples_dict[f'fix_{len(index_fix)}'] = samples_fix                                                                                                                                                                                                                                                                                                   
-        # plot     
-        index_opt = np.where(vals_opt.flatten() >= 0.382)[0]
-        samples_opt_no_fix = samples_opt[:, index_opt]
-        vals_opt_no_fix = vals_opt[index_opt]
+        if not re_eval:
+            samples_opt_fix = samples_fix
+            vals_opt_fix = vals_fix
+            vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()          
+            samples_dict[f'fix_{len(index_fix)}'] = samples_fix                                                                                                                                                                                                                                                                                                   
+            # plot     
+            samples_opt_no_fix = samples_opt
+            vals_opt_no_fix = vals_opt
+        else:
+            index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
+            samples_opt_fix = samples_fix[:, index_opt_fix]
+            vals_opt_fix = vals_fix[index_opt_fix]
+            vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()          
+            samples_dict[f'fix_{len(index_fix)}'] = samples_fix                                                                                                                                                                                                                                                                                                   
+            # plot     
+            index_opt = np.where(vals_opt.flatten() >= 0.382)[0]
+            samples_opt_no_fix = samples_opt[:, index_opt]
+            vals_opt_no_fix = vals_opt[index_opt]
+
         fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
             param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
-        plt.savefig(f'{fig_path}/{len(index_fix)}_{param_range}.png', dpi=300)
+        plt.savefig(f'{fig_path}/{len(index_fix)}_{param_range}_no_reeval.png', dpi=300)
 
-    cal_prop_optimal(vals_dict, dot_vals, fig_path)
     # Calculate the stats of objectives vs. Parameter Fixing
-    df_stats = cal_stats(vals_opt, vals_dict, re_eval)
-    df_stats.to_csv(f'{fig_path}/F_stats_{param_range}.csv')
+    # cal_prop_optimal(vals_dict, dot_vals, fig_path)
+    # df_stats = cal_stats(vals_opt, vals_dict, re_eval)
+    # df_stats.to_csv(f'{fig_path}/F_stats_{param_range}.csv')
+    # np.savetxt(f'{fig_path}/fixed_values_{plot_range}.txt', x_default)
+    
+    # Calculate the Spearman correlation between parameters
+    # spr_coef(dot_samples, dot_vals, fsave)
 
     # corner plot
     fig = corner_pot(samples_dict, vals_dict, samples_opt_no_fix, vals_opt_no_fix.flatten(), index_fix, y_lab='F')
-    plt.savefig(f'{fig_path}/corner_plot_sub_{param_range}.png', dpi=300)
+    plt.savefig(f'{fig_path}/corner_plot_sub_{param_range}_no_reeval.png', dpi=300)
 
     # Box plot
     # normalize the vals in vals_dict so as to well distinguish the feasible F.
@@ -364,11 +376,11 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     for key, v in vals_dict.items():
         vals_dict_norm[key] = 1 / (2 - v)
     vals_opt_norm = 1 / (2 - vals_opt)
-    box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, f'boxplot_{param_range}_norm', y_label='1/(2-F)', y_norm=True)
+    box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, f'boxplot_{param_range}_norm_no_reeval', y_label='1/(2-F)', y_norm=True)
     # box_plot(vals_dict_feasible_norm, vals_feasible_norm, num_fix, fig_path, 'boxplot_feasible_norm', y_label='1/(2-F)', y_norm=True)
-    box_plot(vals_dict, vals_opt, num_fix, fig_path, f'boxplot_feasible_{param_range}', y_label='F', y_norm=False)
+    box_plot(vals_dict, vals_opt, num_fix, fig_path, f'boxplot_feasible_{param_range}_no_reeval', y_label='F', y_norm=False)
     return dot_vals, vals_dict, index_fix
- # END fix_plot()
+ # END fix_plot() #_no_reeval
 
 
 # import GP
@@ -404,7 +416,7 @@ def run_fix():
     x_training = gp.X_train_
     y_training = gp.y_train_
 
-        # visualization of the effects of factor fixing
+    # visualization of the effects of factor fixing
     # define the variables for PCE
     param_file = file_settings()[-1]
     ind_vars, variables_full = variables_prep(param_file, product_uniform='uniform', dummy=False)
@@ -427,18 +439,18 @@ def run_fix():
     # Calculate the ratio of calibrating samples in the sub-region
     if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
         df = ratio_subreg(gp)
-        df.to_csv(f'{fpath}ratio_cali_subreg.csv')
+        # df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
     # Calculate results with and create plots VS fixing parameters
     fsave = fpath + 'analytic-sa/'
     norm_y = False
     vals_fix_dict = {}
     dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_mean', param_range='full', re_eval=True, norm_y = norm_y)
+            variables_full, variable_feasible, plot_range='sub_mean', param_range='full', re_eval=False, norm_y = norm_y)
     _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_rand', param_range='full', re_eval=True, norm_y = norm_y)
+            variables_full, variable_feasible, plot_range='sub_rand', param_range='full', re_eval=False, norm_y = norm_y)
     _, vals_fix_dict['sub_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_max', param_range='full', re_eval=True, norm_y = norm_y)
+            variables_full, variable_feasible, plot_range='sub_max', param_range='full', re_eval=False, norm_y = norm_y)
     # END run_fix()
 
 def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
