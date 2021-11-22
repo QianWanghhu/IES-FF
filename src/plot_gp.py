@@ -89,7 +89,8 @@ def choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals):
         x_default = define_constants(samples_opt, 13, stats = np.mean)
         fig_path = 'fix_mean_subreg'
     elif plot_range == 'sub_rand':
-        x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 10]
+        # breakpoint()
+        x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 8] # 38 for rand
         fig_path = 'fix_rand_subreg'
     elif plot_range == 'sub_max':
         x_default = dot_samples[:, np.where(dot_vals>=dot_vals.max())[0]]
@@ -189,11 +190,12 @@ def box_plot(vals_dict, vals_opt, num_fix, fig_path,fig_name, y_label='1/(2-F)',
     ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis=0.5)
     if y_norm == True:
         ax.axhline(1/(2 - 0.382),  color='orange', linestyle='--', alpha=1 , linewidth=1)
+        ax.set_ylim(0, 0.8)
     else:
         ax.axhline(0.382,  color='orange', linestyle='--', alpha=1 , linewidth=1)
+        ax.set_ylim(0.3, 0.8)
     ax.set_xlabel('Number of fixed parameters')
     ax.set_ylabel(y_label)
-    # ax.set_ylim(0.2, 1.4)
     plt.savefig(f'{fig_path}/{fig_name}.png', dpi=300)
 
 def spr_coef(dot_samples, dot_vals, fsave):
@@ -270,15 +272,15 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     """
     from funcs.utils import fix_sample_set, dotty_plot
 
-    dot_fn = f'{file_settings()[0]}gp_run_1024/dotty_samples_{param_range}.txt'
+    dot_fn = f'{file_settings()[0]}gp_run_1117/dotty_samples_{param_range}.txt'
     if not os.path.exists(dot_fn):
-        dot_samples = generate_independent_random_samples(variable_temp, 100000)
+        dot_samples = generate_independent_random_samples(variable_temp, 150000)
         np.savetxt(dot_fn, dot_samples)
     else:
         dot_samples = np.loadtxt(dot_fn)
 
     dot_vals = np.zeros(shape=(dot_samples.shape[1], 1))
-    for ii in range(10):
+    for ii in range(15):
         dot_vals[10000*ii:(ii+1)*10000] = gp.predict(dot_samples[:, 10000*ii:(ii+1)*10000].T)
     
     # Whether to re-evaluate the optimal values.
@@ -324,7 +326,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     
         # calculate with surrogate 
         if re_eval == True:
-            for ii in range(10):
+            for ii in range(15):
                 vals_fix[10000*ii:(ii+1)*10000] = gp.predict(samples_fix[:, 10000*ii:(ii+1)*10000].T)
         else:
             vals_fix = gp.predict(samples_fix.T)
@@ -355,7 +357,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
 
         fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
             param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
-        plt.savefig(f'{fig_path}/{len(index_fix)}_{param_range}_no_reeval.png', dpi=300)
+        plt.savefig(f'{fig_path}/{len(index_fix)}_{param_range}_reeval.png', dpi=300)
 
     # Calculate the stats of objectives vs. Parameter Fixing
     # cal_prop_optimal(vals_dict, dot_vals, fig_path)
@@ -401,7 +403,6 @@ def run_fix():
         Return:
         =======
         variable_feasible: pyapprox.IndependentMultivariateRandomVariable
-
         """
         if x_samples.shape[0] == num_pars:
             x_samples = x_samples.T
@@ -411,7 +412,7 @@ def run_fix():
         variable_feasible = pyapprox.IndependentMultivariateRandomVariable(univariable_feasible)
         return variable_feasible
 
-    fpath = '../output/gp_run_1024/'
+    fpath = '../output/gp_run_1117/'
     gp = pickle.load(open(f'{fpath}gp_0.pkl', "rb"))
     x_training = gp.X_train_
     y_training = gp.y_train_
@@ -427,30 +428,33 @@ def run_fix():
     variable_temp = define_variable(x_training, y_training, -5, num_pars=13)
 
     # Identify the parameter ranges with output value satisfying a given criteria
-    dot_fn = f'{file_settings()[0]}gp_run_1024/dotty_parameter_range.txt'
+    dot_fn = f'{file_settings()[0]}gp_run_1117/dotty_parameter_range.txt'
     if not os.path.exists(dot_fn):
-        dot_samples = generate_independent_random_samples(variable_temp, 10000)
+        variable_temp_range = define_variable(x_training, y_training, 0, num_pars=13)
+        dot_samples = generate_independent_random_samples(variable_temp_range, 40000)
         np.savetxt(dot_fn, dot_samples)
     else:
         dot_samples = np.loadtxt(dot_fn)
+
     dot_vals = gp.predict(dot_samples.T)
     variable_feasible= define_variable(dot_samples, dot_vals, 0.382, num_pars=13)
 
     # Calculate the ratio of calibrating samples in the sub-region
     if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
         df = ratio_subreg(gp)
-        # df.to_csv(f'{fpath}ratio_cali_subreg.csv')
+        df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
     # Calculate results with and create plots VS fixing parameters
-    fsave = fpath + 'analytic-sa/'
+    fsave = fpath + 'sampling-sa/' # if sampling, use variable_feasible; else, use variable_temp
     norm_y = False
+    param_range = 'sub'
     vals_fix_dict = {}
-    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_mean', param_range='full', re_eval=False, norm_y = norm_y)
-    _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_rand', param_range='full', re_eval=False, norm_y = norm_y)
-    _, vals_fix_dict['sub_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_max', param_range='full', re_eval=False, norm_y = norm_y)
+    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'sampling', 
+            variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=False, norm_y = norm_y)
+    _, vals_fix_dict['sub_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'sampling', 
+            variables_full, variable_feasible, plot_range='sub_rand', param_range=param_range, re_eval=False, norm_y = norm_y)
+    _, vals_fix_dict['sub_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'sampling', 
+            variables_full, variable_feasible, plot_range='sub_max', param_range=param_range, re_eval=False, norm_y = norm_y)
     # END run_fix()
 
 def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
@@ -491,6 +495,7 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
         # ax.text(-950, -200, r'$RMSE = %.3f$'%rmse)
         ax.text(0.05, 0.75, r'$R^2 = %.3f$'%r2,  transform=ax.transAxes)
         ax.text(0.05, 0.65, r'$RMSE = %.3f$'%rmse,  transform=ax.transAxes)
+        # plt.show()
         if save_fig:
             plt.savefig(f'{fpath}figs/gpr_validation_{plot_range}_range_text.png', dpi=300)
     # END plot()     
@@ -542,20 +547,24 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
         np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
 
     # import GP
-    # gp = pickle.load(open(f'{fpath}gp_0.pkl', "rb"))
-    # x_training = gp.X_train_
-    # y_training = gp.y_train_
-    # if not os.path.exists(fpath+'vali_samples.txt'):
-    #     print("There is no validation samples and will generate.")
-    #     vali_samples_save(gp)
-    # else:
-    #     vali_samples = np.loadtxt(fpath+'vali_samples.txt') 
-    #     plot(gp, vali_samples, fpath, xlabel, ylabel, plot_range=plot_range, save_fig=save_fig)
+    gp = pickle.load(open(f'{fpath}gp_0.pkl', "rb"))
+    x_training = gp.X_train_
+    y_training = gp.y_train_
+    if not os.path.exists(fpath+'vali_samples.txt'):
+        print("There is no validation samples and will generate.")
+        vali_samples_save(gp)
+    else:
+        vali_samples = np.loadtxt(fpath+'vali_samples.txt') 
+        # breakpoint()
+        y_gp = gp.predict(vali_samples[0:13, :].T).flatten()
+        # plt.scatter(vali_samples[-1, :], y_gp)
+        # plt.show()
+        plot(gp, vali_samples, fpath, xlabel, ylabel, plot_range=plot_range, save_fig=save_fig)
     
     # END plot_validation()
 
 
-# plot_validation(fpath='../output/gp_run_1024/', xlabel='Model outputs', 
-#     ylabel='GP simulation', plot_range='full', save_fig=False)
+# plot_validation(fpath='../output/gp_run_1117/', xlabel='Model outputs', 
+#     ylabel='GP simulation', plot_range='sub', save_fig=True)
 
 run_fix()
