@@ -252,7 +252,7 @@ def convergence_study(kernel, function, sampler,
                       update_kernel_scale_num_samples,
                       noise_level=0, return_samples=False,
                       norm=np.linalg.norm, callback=None, gp_kernel=None,
-                      gp_kernel_ob1=None, gp_kernel_ob2=None):
+                      gp_kernel_ob1=None, gp_kernel_ob2=None, adaptive=True):
 
     # dirty hack to include two GP kernel types (for IVAR)
     if hasattr(kernel, "__len__"):
@@ -372,18 +372,19 @@ def convergence_study(kernel, function, sampler,
             y_training = gp.y_train_
             num_y_optimize = y_training[y_training >= 0.382].shape[0]
 
-            if resample_flag & (num_y_optimize <= 20):
-                new_candidates, thsd_viney = resample_candidate(gp, sampler, thsd, 
-                    num_samples, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
+            if adaptive:
+                if resample_flag & (num_y_optimize <= 20):
+                    new_candidates, thsd_viney = resample_candidate(gp, sampler, thsd, 
+                        num_samples, gp_ob1=gp_ob1, gp_ob2=gp_ob2)
 
-                sampler.candidate_samples = new_candidates
-                # sampler.init_pivots = None
-                print('----------Update candidate set')
-                print(f'---------Threhsolds used to constrain parameter ranges:')
-                print(f' viney_F: {thsd_viney}')
-                print(f'---------The size of new candidate samples is {new_candidates.shape[1]}')
-                np.savetxt('candidate.txt', new_candidates)
-    # save GP for NSE and PBIAS
+                    sampler.candidate_samples = new_candidates
+                    # sampler.init_pivots = None
+                    print('----------Update candidate set')
+                    print(f'---------Threhsolds used to constrain parameter ranges:')
+                    print(f' viney_F: {thsd_viney}')
+                    print(f'---------The size of new candidate samples is {new_candidates.shape[1]}')
+                    np.savetxt('candidate.txt', new_candidates)
+        # save GP for NSE and PBIAS
     # pickle.dump(gp_ob1, open('gp_ob1.pkl', "wb"))
     # pickle.dump(gp_ob2, open('gp_ob2.pkl', "wb"))
 
@@ -392,6 +393,25 @@ def convergence_study(kernel, function, sampler,
 
     return errors, nsamples
 
+class HaltonSampler(object):
+    def __init__(self, nvars, variables):
+        self.nvars = nvars
+        self.variables = variables
+        if self.variables is not None:
+            assert self.variables.num_vars() == self.nvars
+            self.marginal_icdfs = [
+                v.ppf for v in self.variables.all_variables()]
+        else:
+            self.marginal_icdfs = None
+        self.ntraining_samples = 0
+        self.training_samples = None
+
+    def __call__(self, nsamples):
+        self.training_samples = transformed_halton_sequence(
+            self.marginal_icdfs, self.nvars, nsamples)
+        new_samples =  self.training_samples[:, self.ntraining_samples:]
+        self.ntraining_samples = self.training_samples.shape[1]
+        return new_samples, 0
 
 def unnormalized_posterior(gp, prior_pdf, samples, temper_param=1):
     prior_vals = prior_pdf(samples).squeeze()
@@ -485,7 +505,7 @@ def get_prior_samples(num_vars, variables, nsamples):
 def bayesian_inference_example():
     # read parameter distributions
     datapath = file_settings()[1]
-    para_info = pd.read_csv(datapath + 'Parameters-PCE2.csv')
+    para_info = pd.read_csv(datapath + 'Parameters-PCE.csv')
 
     # define the variables for PCE
     param_file = file_settings()[-1]
@@ -548,14 +568,15 @@ def bayesian_inference_example():
         max_num_samples=num_new_samples.sum(),
         generate_random_samples=None)
     adaptive_cholesky_sampler.set_kernel(copy.deepcopy(kernel))
-    sobol_sampler = sobol_sequence
+    sobol_sampler = HaltonSampler(num_vars, variables)
 
-    samplers = [adaptive_cholesky_sampler]
-    methods = ['Learning-Weighted-Cholesky-b']
-    labels = [r'$\mathrm{Adapted\;Weighted\;Cholesky}$']
+    samplers = [adaptive_cholesky_sampler, sobol_sampler][1:]
+    methods = ['Learning-Weighted-Cholesky-b', 'Sobol-sequence'][1:]
+    labels = [r'$\mathrm{Adapted\;Weighted\;Cholesky}$', r'$\mathrm{Sobol\;Sequence}$'][1:]
     fixed_scales = [False]
+    adapt_bools = [True, False][1:]
 
-    for sampler, method, fixed_scale in zip(samplers, methods, fixed_scales):
+    for sampler, method, fixed_scale, adapt_bool in zip(samplers, methods, fixed_scales, adapt_bools):
         filename = get_filename(method, fixed_scale)
         print(filename)
         if os.path.exists(filename):
@@ -580,7 +601,7 @@ def bayesian_inference_example():
             generate_validation_samples, num_new_samples,
             update_kernel_scale_num_samples, callback=callback,
             return_samples=True, 
-            gp_kernel_ob1=gp_kernel_ob1, gp_kernel_ob2=gp_kernel_ob2)
+            gp_kernel_ob1=gp_kernel_ob1, gp_kernel_ob2=gp_kernel_ob2, adaptive=adapt_bool)
 
         np.savez(filename, nsamples=nsamples, errors=errors,
                  cond_nums=np.asarray(cond_nums), samples=samples,
