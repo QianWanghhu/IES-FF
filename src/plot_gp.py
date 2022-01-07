@@ -29,7 +29,7 @@ mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
 from funcs.read_data import file_settings, variables_prep
-from gp_pce_model import *
+from adaptive_gp_model import *
 
 # Calculate the ratio of samples in the subregion
 def ratio_subreg(gp):
@@ -588,7 +588,7 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
         np.savetxt(f'{fpath}vali_samples.txt', vali_samples)
 
     # import GP
-    gp = pickle.load(open(f'{fpath}gp_1.pkl', "rb"))
+    gp = pickle.load(open(f'{fpath}gp_0.pkl', "rb"))
     x_training = gp.X_train_
     y_training = gp.y_train_
     num_new_samples = np.asarray([20]+[8]*10+[16]*20+[24]*20+[40]*18)
@@ -608,26 +608,41 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
         plot(gp, vali_samples, fpath, xlabel, ylabel, plot_range=plot_range, save_fig=save_fig)
     
     # Calculate the errors due vs increasing samples
-    error_df = pd.DataFrame(index=num_sample_cum, columns=['r2_full', 'r2_sub', 'rmse_full', 'rmse_sub'])
-    for ntrain in num_sample_cum:    
-        print(f'-------------{ntrain} training samples------------')
-        gp_temp = gp.fit(x_training[0:ntrain, :].T, y_training[0:ntrain])
-        y_hat = gp_temp.predict(vali_samples[0:13, :].T).flatten()
-        error_df.loc[ntrain, 'r2_sub'] = r2_score(vali_samples[-1, 0:100], y_hat[0:100])
-        error_df.loc[ntrain, 'r2_full'] = r2_score(vali_samples[-1, 100:], y_hat[100:])
-        error_df.loc[ntrain, 'rmse_full'] = sqrt(mean_squared_error(vali_samples[-1, 100:], y_hat[100:]))
-        error_df.loc[ntrain, 'rmse_sub'] = sqrt(mean_squared_error(vali_samples[-1, 0:100], y_hat[0:100]))
-    
-    error_df.to_csv(f'{fpath}error_df.csv')
-    error_df.loc[:, ['rmse_full', 'rmse_sub']].plot(logy=True, logx=True)
-    error_df.loc[:, ['r2_full', 'r2_sub']].applymap(lambda x: 1-x).plot(logy=True, logx=True)
-
-
-    
+    if os.path.exists('error_df.csv'):
+        error_df = pd.DataFrame(index=num_sample_cum, columns=['r2_full', 'r2_sub', 'rmse_full', 'rmse_sub'])
+        for ntrain in num_sample_cum:    
+            print(f'-------------{ntrain} training samples------------')
+            gp_temp = gp.fit(x_training[0:ntrain, :].T, y_training[0:ntrain])
+            y_hat = gp_temp.predict(vali_samples[0:13, :].T).flatten()
+            error_df.loc[ntrain, 'r2_sub'] = r2_score(vali_samples[-1, 0:100], y_hat[0:100])
+            error_df.loc[ntrain, 'r2_full'] = r2_score(vali_samples[-1, 100:], y_hat[100:])
+            error_df.loc[ntrain, 'rmse_full'] = sqrt(mean_squared_error(vali_samples[-1, 100:], y_hat[100:]))
+            error_df.loc[ntrain, 'rmse_sub'] = sqrt(mean_squared_error(vali_samples[-1, 0:100], y_hat[0:100]))
+        
+        error_df.to_csv(f'{fpath}error_df.csv')   
     # END plot_validation()
 
 
-# plot_validation(fpath='../output/gp_run_1117/', xlabel='Model outputs', 
-#     ylabel='GP simulation', plot_range='full', save_fig=True)
+# plot_validation(fpath='../output/gp_run_20220107/', xlabel='Model outputs', 
+#     ylabel='GP simulation', plot_range='sub', save_fig=True)
 
 # run_fix()
+
+# Compare the accuracy of adaptive and non-adaptive GP:
+fpaths = ['../output/gp_run_1117/', '../output/gp_run_20220107/']
+error_adaptive = pd.read_csv(f'{fpaths[0]}error_df.csv', index_col='Unnamed: 0')
+error_nonadaptive = pd.read_csv(f'{fpaths[1]}error_df.csv', index_col='Unnamed: 0')
+sns.set_style('whitegrid')
+fig, axes = plt.subplots(1, 2, figsize=(6*2, 5), sharey=True, sharex=False)
+error_adaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
+error_nonadaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
+axes[0].legend(['Adaptive GP', 'Non-adaptive GP'])
+axes[0].set_title('(a)')
+error_adaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
+error_nonadaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
+axes[1].set_title('(b)')
+axes[1].legend(['Adaptive GP', 'Non-adaptive GP'])
+plt.savefig(f'{fpaths[0]}figs/GP_compare.png', dpi=300, format='png')
+
+
+
