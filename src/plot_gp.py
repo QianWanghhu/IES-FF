@@ -398,7 +398,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
 
 
 # import GP
-def run_fix():
+def run_fix(fpath):
 
     # Get the feasible region
     def define_variable(x_samples, y_vals, y_threshold, num_pars):
@@ -424,7 +424,6 @@ def run_fix():
         variable_feasible = pyapprox.IndependentMultivariateRandomVariable(univariable_feasible)
         return variable_feasible
 
-    fpath = '../output/gp_run_1117/'
     gp = pickle.load(open(f'{fpath}gp_0.pkl', "rb"))
     x_training = gp.X_train_
     y_training = gp.y_train_
@@ -495,7 +494,7 @@ def run_fix():
     # END run_fix()
 
 
-def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
+def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False, comp=False):
     from sklearn.metrics import mean_squared_error
     from sklearn.metrics import r2_score
     from math import sqrt
@@ -619,30 +618,34 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False):
             error_df.loc[ntrain, 'rmse_full'] = sqrt(mean_squared_error(vali_samples[-1, 100:], y_hat[100:]))
             error_df.loc[ntrain, 'rmse_sub'] = sqrt(mean_squared_error(vali_samples[-1, 0:100], y_hat[0:100]))
         
-        error_df.to_csv(f'{fpath}error_df.csv')   
+        error_df.to_csv(f'{fpath}error_df.csv')
+
+    if comp:
+        # Compare the accuracy of adaptive and non-adaptive GP:
+        fpaths = ['../output/gp_run_1117/', '../output/gp_run_20220107/']
+        error_adaptive = pd.read_csv(f'{fpaths[0]}error_df.csv', index_col='Unnamed: 0')
+        error_nonadaptive = pd.read_csv(f'{fpaths[1]}error_df.csv', index_col='Unnamed: 0')
+        sns.set_style('whitegrid')
+        fig, axes = plt.subplots(1, 2, figsize=(6*2, 5), sharey=True, sharex=False)
+        error_adaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
+        error_nonadaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
+        axes[0].legend(['Adaptive GP', 'Non-adaptive GP'])
+        axes[0].set_title('(a)')
+        error_adaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
+        error_nonadaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
+        axes[1].set_title('(b)')
+        axes[1].legend(['Adaptive GP', 'Non-adaptive GP'])
+        plt.savefig(f'{fpaths[0]}figs/GP_compare.png', dpi=300, format='png')   
     # END plot_validation()
 
 
 # plot_validation(fpath='../output/gp_run_20220107/', xlabel='Model outputs', 
-#     ylabel='GP simulation', plot_range='sub', save_fig=True)
+#     ylabel='GP simulation', plot_range='sub', save_fig=True, comp=True)
 
-# run_fix()
+# run_fix(fpath = '../output/gp_run_1117/')
 
-# Compare the accuracy of adaptive and non-adaptive GP:
-fpaths = ['../output/gp_run_1117/', '../output/gp_run_20220107/']
-error_adaptive = pd.read_csv(f'{fpaths[0]}error_df.csv', index_col='Unnamed: 0')
-error_nonadaptive = pd.read_csv(f'{fpaths[1]}error_df.csv', index_col='Unnamed: 0')
-sns.set_style('whitegrid')
-fig, axes = plt.subplots(1, 2, figsize=(6*2, 5), sharey=True, sharex=False)
-error_adaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
-error_nonadaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
-axes[0].legend(['Adaptive GP', 'Non-adaptive GP'])
-axes[0].set_title('(a)')
-error_adaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
-error_nonadaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
-axes[1].set_title('(b)')
-axes[1].legend(['Adaptive GP', 'Non-adaptive GP'])
-plt.savefig(f'{fpaths[0]}figs/GP_compare.png', dpi=300, format='png')
+
+
 
 
 
