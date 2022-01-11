@@ -36,7 +36,7 @@ def sa_gp(fsave, gp, ind_vars, variables, param_names,
     if not os.path.exists(fsave):
         os.mkdir(fsave)
 
-    filename = f'{fsave}/rankingss.json'
+    filename = f'{fsave}/rankings.json'
     if not os.path.exists(filename):
         order = 2
         interaction_terms = pya.compute_hyperbolic_indices(len(ind_vars), order)
