@@ -16,13 +16,11 @@ SC #110
 SC #111
 SC #105
 SC #161
-SC #104
-SC #103
 "))
 
 setwd("E:/cloudStor/source/projects/MW_BASE_RC8_411_4712/")
 subc=read_sf("876a3af3-9508-4f42-802b-cf410c72404e.shp")
-cat_dem = raster("1.flt")
+# cat_dem = raster("1.flt")
 
 st_crs(subc)<-"+proj=aea +lat_1=-18 +lat_2=-36 +lat_0=0 +lon_0=132 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs "
 subc3<-st_transform(subc,"+proj=longlat +datum=WGS84 +no_defs ")
@@ -35,5 +33,5 @@ plot(x2[,"IntFUs"])
 
 st_crs(x2)<-"+proj=aea +lat_1=-18 +lat_2=-36 +lat_0=0 +lon_0=132 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs "
 x2<-st_transform(x2,"+proj=longlat +datum=WGS84 +no_defs ")
-write_sf(x2,"mw_LU.shp")
+write_sf(x2,"E:/cloudStor/PhDocs/Siting of the realtime Nitrate measurement/GISdata/mw_LU.shp")
 # Up to here for Qian
