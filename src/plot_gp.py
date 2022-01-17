@@ -604,7 +604,7 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False, co
         y_gp = gp.predict(vali_samples[0:13, :].T).flatten()
         # plt.scatter(vali_samples[-1, :], y_gp)
         # plt.show()
-        plot(gp, vali_samples, fpath, xlabel, ylabel, plot_range=plot_range, save_fig=save_fig)
+        # plot(gp, vali_samples, fpath, xlabel, ylabel, plot_range=plot_range, save_fig=save_fig)
     
     # Calculate the errors due vs increasing samples
     if os.path.exists('error_df.csv'):
@@ -627,20 +627,22 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False, co
         error_nonadaptive = pd.read_csv(f'{fpaths[1]}error_df.csv', index_col='Unnamed: 0')
         sns.set_style('whitegrid')
         fig, axes = plt.subplots(1, 2, figsize=(6*2, 5), sharey=True, sharex=False)
-        error_adaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
+        error_adaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0], ylabel='RMSE')
         error_nonadaptive.loc[:, ['rmse_full']].plot(logy=True, logx=True, ax=axes[0])
         axes[0].legend(['Adaptive GP', 'Non-adaptive GP'])
         axes[0].set_title('(a)')
+        axes[0].set_xlabel('Sample size')
         error_adaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
         error_nonadaptive.loc[:, ['rmse_sub']].plot(logy=True, logx=True, ax=axes[1])
         axes[1].set_title('(b)')
+        axes[1].set_xlabel('Sample size')
         axes[1].legend(['Adaptive GP', 'Non-adaptive GP'])
         plt.savefig(f'{fpaths[0]}figs/GP_compare.png', dpi=300, format='png')   
     # END plot_validation()
 
 
-# plot_validation(fpath='../output/gp_run_20220107/', xlabel='Model outputs', 
-#     ylabel='GP simulation', plot_range='sub', save_fig=True, comp=True)
+plot_validation(fpath='../output/gp_run_20220107/', xlabel='Model outputs', 
+    ylabel='GP simulation', plot_range='sub', save_fig=True, comp=True)
 
 # run_fix(fpath = '../output/gp_run_1117/')
 

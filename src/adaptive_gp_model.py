@@ -18,7 +18,7 @@ from sklearn.gaussian_process.kernels import RBF, \
     Matern
 
 from pyapprox.density import tensor_product_pdf
-from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_candidate_samples
+from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_gp_candidate_samples
 from pyapprox.low_discrepancy_sequences import sobol_sequence, transformed_halton_sequence
 from pyapprox.utilities import compute_f_divergence, \
     get_tensor_product_quadrature_rule
@@ -52,16 +52,16 @@ mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
 # Create the copy of models and veneer list
-project_name = 'MW_BASE_RC10.rsproj'
-veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
-first_port=15000; num_copies = 8
-_, things_to_record, _, _, _ = modeling_settings()
-processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
+# project_name = 'MW_BASE_RC10.rsproj'
+# veneer_name = 'vcmd45\\FlowMatters.Source.VeneerCmd.exe'   
+# first_port=15000; num_copies = 8
+# _, things_to_record, _, _, _ = modeling_settings()
+# processes, ports = paralell_vs(first_port, num_copies, project_name, veneer_name)
 
-vs_list = vs_settings(ports, things_to_record)
-# obtain the initial values of parameters 
-initial_values = obtain_initials(vs_list[0])
-# vs_list = []
+# vs_list = vs_settings(ports, things_to_record)
+# # obtain the initial values of parameters 
+# initial_values = obtain_initials(vs_list[0])
+vs_list = []
 def run_source_lsq(vars, vs_list=vs_list):
     """
     Script used to run_source and return the output file.
@@ -220,7 +220,7 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
     assert len(thsd) == 3, "The first dimension of thsd should be 3."
     univariable_temp = [stats.uniform(0, x_max[ii]) for ii in range(0, x_max.shape[0])]
     variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
-    new_candidates = generate_candidate_samples(sampler.candidate_samples.shape[0],
+    new_candidates = generate_gp_candidate_samples(sampler.candidate_samples.shape[0],
         num_candidate_samples = 40000, 
             generate_random_samples=None, 
                 variables=variable_temp)
