@@ -28,3 +28,7 @@ src/example_gp_sa/example_gp_sa.zip
 src/example_gp_sa/ST_Ishigami.txt
 
 *.cfg
+
+src/example_gp_sa/gp.pkl
+
+src/example_gp_sa/ST_Ishigami_430.txt
