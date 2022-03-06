@@ -11,7 +11,7 @@ from scipy import stats
 
 from funcs.read_data import file_settings, variables_prep
 from funcs.utils import partial_rank
-from gp_pce_model import *
+from adaptive_gp_model import *
 
 def sa_gp(fsave, gp, ind_vars, variables, param_names, 
     cal_type='sampling', save_values=True, norm_y=False):
@@ -51,7 +51,7 @@ def sa_gp(fsave, gp, ind_vars, variables, param_names,
                         ngp_realizations=100, ninterpolation_samples = 500, nsobol_realizations = 10,
                         stat_functions=(np.mean, np.std))
 
-            np.savez(filename, sa)
+            np.savez('sa', sa)
             ST_values = sa['total_effects']['values']
             ST = np.zeros(shape=(ST_values.shape[0] * ST_values.shape[2], ST_values.shape[1]))
             for ii in range(ST_values.shape[2]):
@@ -66,11 +66,24 @@ def sa_gp(fsave, gp, ind_vars, variables, param_names,
             ST = sa['total_effects']['values']
 
         index_sort = partial_rank(ST, ST.shape[1], conf_level=0.95)
+        print(index_sort)
         if save_values:
             ST_mean = sa['total_effects']['mean']
             ST_mean = pd.DataFrame(data = ST_mean, index = param_names, columns=['ST'])
             ST_mean['std'] = sa['total_effects']['std']
             ST_mean.to_csv(f'{fsave}/ST.csv')
+
+            Si_mean = sa['sobol_indices']['mean']           
+            Si_mean = pd.DataFrame(data = Si_mean, index = np.arange(Si_mean.shape[0]), columns=['Si'])
+            Si_mean['std'] = sa['sobol_indices']['std']
+            for ii in range(Si_mean.shape[0]):
+                val_pars = param_names[interaction_terms[:, ii] == 1]
+                if len(val_pars) == 2:
+                    Si_mean.loc[ii, ['par1', 'par2']] = val_pars
+                else:
+                    Si_mean.loc[ii, ['par1', 'par2']] = [val_pars[0], val_pars[0]]
+
+            Si_mean.to_csv(f'{fsave}/SI.csv')
 
         with open(filename, 'w') as fp:
             json.dump(index_sort, fp, indent=2)
