@@ -18,12 +18,8 @@ from sklearn.gaussian_process.kernels import RBF, \
     Matern
 
 from pyapprox.density import tensor_product_pdf
-from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_gp_candidate_samples
+from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_candidate_samples
 from pyapprox.low_discrepancy_sequences import sobol_sequence, transformed_halton_sequence
-from pyapprox.utilities import compute_f_divergence, \
-    get_tensor_product_quadrature_rule
-from pyapprox.probability_measure_sampling import generate_independent_random_samples_deprecated, rejection_sampling
-from pyapprox.visualization import get_meshgrid_function_data
 from pyapprox import generate_independent_random_samples
 from pyapprox.variables import IndependentMultivariateRandomVariable
 from pyapprox.variable_transformations import AffineRandomVariableTransformation
@@ -220,7 +216,7 @@ def resample_candidate(gp, sampler, thsd, num_samples, gp_ob1=None, gp_ob2=None)
     assert len(thsd) == 3, "The first dimension of thsd should be 3."
     univariable_temp = [stats.uniform(0, x_max[ii]) for ii in range(0, x_max.shape[0])]
     variable_temp = pyapprox.IndependentMultivariateRandomVariable(univariable_temp)
-    new_candidates = generate_gp_candidate_samples(sampler.candidate_samples.shape[0],
+    new_candidates = generate_candidate_samples(sampler.candidate_samples.shape[0],
         num_candidate_samples = 40000, 
             generate_random_samples=None, 
                 variables=variable_temp)

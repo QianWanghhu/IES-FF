@@ -29,7 +29,7 @@ mpl.rcParams['text.latex.preamble'] = \
     r'\usepackage{siunitx}\usepackage{amsmath}\usepackage{amssymb}'
 
 from funcs.read_data import file_settings, variables_prep
-from adaptive_gp_model import *
+from gp_pce_model import *
 
 # Calculate the ratio of samples in the subregion
 def ratio_subreg(gp):
@@ -95,7 +95,7 @@ def choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals):
         fig_path = 'fix_rand_subreg'
     elif plot_range == 'full_rand':
         breakpoint()
-        x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 8] # 8 for analytic, 38 for sample
+        x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 38] # 8 for analytic, 38 for sample
         fig_path = 'fix_rand_subreg'
     elif (plot_range == 'sub_max')|(plot_range == 'full_max'):
         x_default = dot_samples[:, np.where(dot_vals>=dot_vals.max())[0]]
@@ -320,6 +320,8 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
         vars = variable_temp
     _, ST = sa_gp(fsave, gp, ind_vars, vars, param_names, 
         cal_type=sa_cal_type, save_values=True, norm_y=norm_y)
+
+    # breakpoint()
     par_rank = np.argsort(ST['ST'].values)
     index_sort = {ii:par_rank[12-ii] for ii in range(13)}
 
@@ -369,7 +371,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
         fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
             param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
         
-        # plt.savefig(f'{fig_path}/{len(index_fix)}_{param_range}_{eval_bool}.png', dpi=300)
+        plt.savefig(f'{fig_path}/{len(index_fix)}_{param_range}_{eval_bool}.png', dpi=300)
 
     # Calculate the stats of objectives vs. Parameter Fixing
     # cal_prop_optimal(vals_dict, dot_vals, fig_path)
@@ -390,9 +392,9 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     for key, v in vals_dict.items():
         vals_dict_norm[key] = 1 / (2 - v)
     vals_opt_norm = 1 / (2 - vals_opt)
-    # box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, f'boxplot_{param_range}_norm_{eval_bool}', y_label='1/(2-F)', y_norm=True)
+    box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, f'boxplot_{param_range}_norm_{eval_bool}', y_label='1/(2-F)', y_norm=True)
     # box_plot(vals_dict_feasible_norm, vals_feasible_norm, num_fix, fig_path, 'boxplot_feasible_norm', y_label='1/(2-F)', y_norm=True)
-    # box_plot(vals_dict, vals_opt, num_fix, fig_path, f'boxplot_feasible_{param_range}_{eval_bool}', y_label='F', y_norm=False)
+    box_plot(vals_dict, vals_opt, num_fix, fig_path, f'boxplot_feasible_{param_range}_{eval_bool}', y_label='F', y_norm=False)
     return dot_vals, vals_dict, index_fix
  # END fix_plot() #_no_reeval
 
@@ -424,6 +426,7 @@ def run_fix(fpath):
         variable_feasible = pyapprox.IndependentMultivariateRandomVariable(univariable_feasible)
         return variable_feasible
 
+    # import GP
     gp = pickle.load(open(f'{fpath}gp_0.pkl', "rb"))
     x_training = gp.X_train_
     y_training = gp.y_train_
@@ -456,23 +459,23 @@ def run_fix(fpath):
         df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
     # Calculate results with and create plots VS fixing parameters
-    fsave = fpath + 'analytic-sa/' # if sampling, use variable_feasible; else, use variable_temp
-    norm_y = False
-    param_range = 'full'
-    vals_fix_dict = {}
-    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=False, norm_y = norm_y)
-    _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=False, norm_y = norm_y)
-    _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=False, norm_y = norm_y)
+    # fsave = fpath + 'analytic-sa/' # if sampling, use variable_feasible; else, use variable_temp
+    # norm_y = False
+    # param_range = 'full'
+    # vals_fix_dict = {}
+    # dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
+    #         variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=False, norm_y = norm_y)
+    # _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+    #         variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=False, norm_y = norm_y)
+    # _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+    #         variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=False, norm_y = norm_y)
     
-    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=True, norm_y = norm_y)
-    _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=True, norm_y = norm_y)
-    _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-            variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=True, norm_y = norm_y)
+    # dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
+    #         variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=True, norm_y = norm_y)
+    # _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+    #         variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=True, norm_y = norm_y)
+    # _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+    #         variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=True, norm_y = norm_y)
     
     fsave = fpath + 'sampling-sa/'
     norm_y = False
@@ -641,10 +644,10 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False, co
     # END plot_validation()
 
 
-plot_validation(fpath='../output/gp_run_20220107/', xlabel='Model outputs', 
-    ylabel='GP simulation', plot_range='sub', save_fig=True, comp=True)
+# plot_validation(fpath='../output/gp_run_20220107/', xlabel='Model outputs', 
+#     ylabel='GP simulation', plot_range='sub', save_fig=True, comp=True)
 
-# run_fix(fpath = '../output/gp_run_1117/')
+run_fix(fpath = '../output/gp_run_1117/')
 
 
 

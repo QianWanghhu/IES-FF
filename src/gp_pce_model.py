@@ -18,7 +18,7 @@ from sklearn.gaussian_process.kernels import RBF, \
     Matern
 
 from pyapprox.density import tensor_product_pdf
-from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_gp_candidate_samples
+from pyapprox.gaussian_process import CholeskySampler, AdaptiveGaussianProcess, generate_candidate_samples
 from pyapprox.low_discrepancy_sequences import transformed_halton_sequence
 from pyapprox.utilities import compute_f_divergence, \
     get_tensor_product_quadrature_rule
