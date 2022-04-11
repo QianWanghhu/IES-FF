@@ -51,13 +51,14 @@ def sa_gp(fsave, gp, ind_vars, variables, param_names,
                         ngp_realizations=100, ninterpolation_samples = 500, nsobol_realizations = 10,
                         stat_functions=(np.mean, np.std))
 
-            np.savez('sa', sa)
+            np.savez(filename, sa)
             ST_values = sa['total_effects']['values']
             ST = np.zeros(shape=(ST_values.shape[0] * ST_values.shape[2], ST_values.shape[1]))
             for ii in range(ST_values.shape[2]):
                 ST[ii*10:(ii+1)*10, :] = ST_values[:, :, ii].\
                     reshape(ST_values.shape[0], ST_values.shape[1])
         else:
+            # breakpoint()
             sa = pyapprox.analytic_sobol_indices_from_gaussian_process(gp, variables, 
             interaction_terms, ngp_realizations=100, ninterpolation_samples=500, 
                 use_cholesky=True, ncandidate_samples=10000, nvalidation_samples=200,
