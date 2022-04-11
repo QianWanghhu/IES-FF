@@ -79,27 +79,40 @@ def choose_fixed_point(plot_range, dot_samples, samples_opt, dot_vals):
     x_default: list, the nominal values for all D parameters
     fig_path: str, the dir defined by the type of nominal values for results to save
     """
+    path_default = f'{file_settings()[0]}gp_run_1117/'
     if plot_range == 'full_mean':
-        x_default = define_constants(dot_samples, 13, stats = np.mean)
+        x_default = np.loadtxt(path_default + 'default_mean.txt')
         fig_path = 'fix_mean_full'
-    elif plot_range == 'sub_median':
-        samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
-        x_default = define_constants(samples_opt, 13, stats = np.median)
-        fig_path = 'fix_median_subreg'
+
     elif plot_range == 'sub_mean':
-        samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
-        x_default = define_constants(samples_opt, 13, stats = np.mean)
+        if not os.path.exists(path_default + 'default_mean.txt'):
+            samples_opt = dot_samples[:, np.where(dot_vals>0.38)[0]]
+            x_default = define_constants(samples_opt, 13, stats = np.mean)
+            np.savetxt(path_default + 'default_mean.txt', x_default)
+        else:
+            x_default = np.loadtxt(path_default + 'default_mean.txt')
         fig_path = 'fix_mean_subreg'
+
     elif plot_range == 'sub_rand':
-        x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 38] # 8 for analytic, 38 for sample
+        if not os.path.exists(path_default + 'default_rand.txt'):
+            x_default = dot_samples[:, np.where(dot_vals>0.38)[0]][:, 11] #11
+            np.savetxt(path_default + 'default_rand.txt', x_default)
+        else:
+            x_default = np.loadtxt(path_default + 'default_rand.txt') # 8 for analytic, 38 for sample
         fig_path = 'fix_rand_subreg'
+
     elif plot_range == 'full_rand':
-        breakpoint()
-        x_default = dot_samples[:, np.where(dot_vals>0.382)[0]][:, 38] # 8 for analytic, 38 for sample
+        x_default = np.loadtxt(path_default + 'default_rand.txt') # 8 for analytic, 38 for sample
         fig_path = 'fix_rand_subreg'
+
     elif (plot_range == 'sub_max')|(plot_range == 'full_max'):
-        x_default = dot_samples[:, np.where(dot_vals>=dot_vals.max())[0]]
+        if not os.path.exists(path_default + 'default_max.txt'):
+            x_default = dot_samples[:, np.where(dot_vals>=dot_vals.max())[0]]
+            np.savetxt(path_default + 'default_max.txt', x_default)
+        else:
+            x_default = np.loadtxt(path_default + 'default_max.txt')     
         fig_path = 'fix_max_subreg'
+
     else:
         AssertionError
     return x_default, fig_path
@@ -122,16 +135,16 @@ def cal_stats(vals_opt, vals_dict, re_eval):
     # PDF plot
     df_stats = pd.DataFrame(columns=['mean', 'std', 'qlow','qup'])
     if re_eval:
-        df_stats.loc['full_set', ['mean', 'std']] = [vals_opt[vals_opt>0.382].mean(), vals_opt[vals_opt>0.382].std()]
-        df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt[vals_opt>0.382], [0.025, 0.957])
+        df_stats.loc['full_set', ['mean', 'std']] = [vals_opt[vals_opt>0.38].mean(), vals_opt[vals_opt>0.38].std()]
+        df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt[vals_opt>0.38], [0.025, 0.975])
     else:
         df_stats.loc['full_set', ['mean', 'std']] = [vals_opt.mean(), vals_opt.std()]
-        df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt, [0.025, 0.957])
+        df_stats.loc['full_set', 'qlow':'qup'] = np.quantile(vals_opt, [0.025, 0.975])
 
     for key, value in vals_dict.items():
         if key != 'fix_13':
             if re_eval:
-                value = value[value>0.382]
+                value = value[value>0.38]
 
             df_stats.loc[key, 'mean'] = value.mean()
             df_stats.loc[key, 'std'] = value.std()
@@ -164,7 +177,7 @@ def plot_pdf(vals_opt, vals_dict, re_eval, fig_path):
     for key, value in vals_dict.items():    
         if key != 'fix_13':
             if re_eval:
-                value = value[value>0.382]
+                value = value[value>0.38]
             sns.distplot(value.flatten(), hist=False, ax=axes[k//4]);
             k += 1
 
@@ -175,10 +188,10 @@ def plot_pdf(vals_opt, vals_dict, re_eval, fig_path):
     axes[2].legend(list(vals_dict.keys())[8:])
     axes[2].set_ylabel('')
     for ii in range(3):
-        axes[ii].axvline(0.382,  color='grey', linestyle='--', alpha=0.7)
+        axes[ii].axvline(0.38,  color='grey', linestyle='--', alpha=0.7)
     plt.savefig(f'{fig_path}/objective_dist.png', dpi=300)
 
-def box_plot(vals_dict, vals_opt, num_fix, fig_path,fig_name, y_label='1/(2-F)', y_norm=True):
+def box_plot(vals_dict, vals_opt, num_fix, fig_path, fig_name, y_label='1/(2-F)', y_norm=True, eval_bool=False):
     """
     Used to generate the boxplot of objective values.
     """
@@ -190,24 +203,60 @@ def box_plot(vals_dict, vals_opt, num_fix, fig_path,fig_name, y_label='1/(2-F)',
     if y_norm:
         df_filter = df
     else:
-        df_filter = df.where(df>0.382)
+        df_filter = df.where(df>0.38)
+    
+    # Calculate values of boxplots
+    if eval_bool:
+        stats_boxplot = pd.DataFrame(columns = ['upper_quartile', 'lower_quartile', 'iqr', 'upper_whisker', 'lower_whisker'], index=np.arange(14))
+        stats_box_dict = get_box_values(df_filter.values)
+        for key, value in stats_box_dict.items():
+            stats_boxplot[key] = value
+        stats_boxplot.to_csv(f'{fig_path}/{fig_name}.csv')
 
-    ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis=0.5)
+    # Create boxplots
+    ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis = 1.5)
     if y_norm == True:
-        ax.axhline(1/(2 - 0.382),  color='orange', linestyle='--', alpha=1 , linewidth=1)
-        ax.set_ylim(0, 0.8)
+        ax.axhline(1/(2 - 0.38),  color='orange', linestyle='--', alpha=1 , linewidth=1)
+        ax.set_ylim(0, 1.0)
     else:
-        ax.axhline(0.382,  color='orange', linestyle='--', alpha=1 , linewidth=1)
-        ax.set_ylim(0.3, 0.8)
+        ax.axhline(0.38,  color='orange', linestyle='--', alpha=1 , linewidth=1)
+        ax.set_ylim(0.3, 1.0)
     ax.set_xlabel('Number of fixed parameters')
     ax.set_ylabel(y_label)
     plt.savefig(f'{fig_path}/{fig_name}.png', dpi=300)
+
+def get_box_values(data):
+    """
+    This function calculates the values shown by boxplot including upper_quartile, 
+        lower_quartile, iqr, upper_whisker, lower_whisker.
+    Parameters:
+    ===========
+    data: np.ndarray, of the shape[D+1, N] where D is the number of parameters and N is the size of the sample.
+
+    Return:
+    =======
+    return_dict: dict, contains values of upper_quartile, 
+        lower_quartile, iqr, upper_whisker, lower_whisker.
+    """
+    iqr = np.zeros(shape = data.shape[1])
+    upper_quartile, lower_quartile = np.zeros_like(iqr), np.zeros_like(iqr)
+    upper_whisker, lower_whisker =  np.zeros_like(iqr), np.zeros_like(iqr)
+
+    for ii in np.arange(iqr.shape[0]):
+        upper_quartile[ii] = np.percentile(data[:, ii][~np.isnan(data[:, ii])], 75)
+        lower_quartile[ii] = np.percentile(data[:, ii][~np.isnan(data[:, ii])], 25)
+        iqr[ii] = upper_quartile[ii] - lower_quartile[ii]
+        upper_whisker[ii] = data[:, ii][data[:, ii] <= upper_quartile[ii] + 1.5*iqr[ii]].max()
+        lower_whisker[ii] = data[:, ii][data[:, ii] >= lower_quartile[ii] - 1.5*iqr[ii]].min()
+    return_dict = {'upper_quartile': upper_quartile, 'lower_quartile': lower_quartile, \
+        'iqr':iqr, 'upper_whisker':upper_whisker, 'lower_whisker': lower_whisker}
+    return return_dict
 
 def spr_coef(dot_samples, dot_vals, fsave):
     """
     Calculate the spearman-rank correlation.
     """
-    samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
+    samples_opt = dot_samples[:, np.where(dot_vals>0.38)[0]]
     coef_dict = pd.DataFrame(index=np.arange(0, 13), columns=np.arange(0, 13))
     p_dict = pd.DataFrame(index=np.arange(0, 13), columns=np.arange(0, 13))
     for ii in range(13):
@@ -238,8 +287,8 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
     for key, x_value in samples_dict.items():
         num_fix = int(key.split('_')[1])
         if num_fix > (num_param_start-1):
-            x_value_opt = x_value[:, np.where(vals_dict[key]>0.382)[0]]
-            y_value_opt = vals_dict[key][vals_dict[key]>0.382]
+            x_value_opt = x_value[:, np.where(vals_dict[key]>0.38)[0]]
+            y_value_opt = vals_dict[key][vals_dict[key]>0.38]
             k = num_fix - num_param_start
             for ii in index_fix[num_fix-1:]:
                 sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[k, num_fix-num_param_start], color='royalblue', s=20, alpha=0.8)
@@ -299,8 +348,8 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
         samples_opt = dot_samples 
         vals_opt = dot_vals 
     else:
-        samples_opt = dot_samples[:, np.where(dot_vals>0.382)[0]]
-        vals_opt = dot_vals[dot_vals>0.382]
+        samples_opt = dot_samples[:, np.where(dot_vals>0.38)[0]]
+        vals_opt = dot_vals[dot_vals>0.38]
 
     # Choose the fixed values
     print(f'Number of values beyond the threshold: {samples_opt.shape[1]}')
@@ -344,10 +393,6 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
         else:
             vals_fix = gp.predict(samples_fix.T)
 
-        # if num_fix[-1] == 2:
-        #    np.savetxt(f'{fig_path}/samples_fix_{num_fix[-1]}_{param_range}.txt', samples_fix) 
-        #    np.savetxt(f'{fig_path}/values_fix_{num_fix[-1]}_{param_range}.txt', vals_fix)
-
         # select points statisfying the optima
         if not re_eval:
             samples_opt_fix = samples_fix
@@ -358,29 +403,29 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
             samples_opt_no_fix = samples_opt
             vals_opt_no_fix = vals_opt
         else:
-            index_opt_fix = np.where(vals_fix.flatten() >= 0.382)[0]
+            index_opt_fix = np.where(vals_fix.flatten() > 0.38)[0]
             samples_opt_fix = samples_fix[:, index_opt_fix]
             vals_opt_fix = vals_fix[index_opt_fix]
             vals_dict[f'fix_{len(index_fix)}'] = vals_fix.flatten()          
             samples_dict[f'fix_{len(index_fix)}'] = samples_fix                                                                                                                                                                                                                                                                                                   
             # plot     
-            index_opt = np.where(vals_opt.flatten() >= 0.382)[0]
+            index_opt = np.where(vals_opt.flatten() > 0.38)[0]
             samples_opt_no_fix = samples_opt[:, index_opt]
             vals_opt_no_fix = vals_opt[index_opt]
 
+        # Dotty plot iteratively
         fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
-            param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix
-        
+            param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix        
         plt.savefig(f'{fig_path}/{len(index_fix)}_{param_range}_{eval_bool}.png', dpi=300)
 
     # Calculate the stats of objectives vs. Parameter Fixing
-    # cal_prop_optimal(vals_dict, dot_vals, fig_path)
-    # df_stats = cal_stats(vals_opt, vals_dict, re_eval)
-    # df_stats.to_csv(f'{fig_path}/F_stats_{param_range}.csv')
-    # np.savetxt(f'{fig_path}/fixed_values_{plot_range}.txt', x_default)
+    cal_prop_optimal(vals_dict, dot_vals, fig_path)
+    df_stats = cal_stats(vals_opt, vals_dict, re_eval)
+    df_stats.to_csv(f'{fig_path}/F_stats_{param_range}.csv')
+    np.savetxt(f'{fig_path}/fixed_values_{plot_range}.txt', x_default)
     
     # Calculate the Spearman correlation between parameters
-    # spr_coef(dot_samples, dot_vals, fsave)
+    spr_coef(dot_samples, dot_vals, fsave)
 
     # corner plot
     fig = corner_pot(samples_dict, vals_dict, samples_opt_no_fix, vals_opt_no_fix.flatten(), index_fix, y_lab='F')
@@ -394,14 +439,13 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
     vals_opt_norm = 1 / (2 - vals_opt)
     box_plot(vals_dict_norm, vals_opt_norm, num_fix, fig_path, f'boxplot_{param_range}_norm_{eval_bool}', y_label='1/(2-F)', y_norm=True)
     # box_plot(vals_dict_feasible_norm, vals_feasible_norm, num_fix, fig_path, 'boxplot_feasible_norm', y_label='1/(2-F)', y_norm=True)
-    box_plot(vals_dict, vals_opt, num_fix, fig_path, f'boxplot_feasible_{param_range}_{eval_bool}', y_label='F', y_norm=False)
+    box_plot(vals_dict, vals_opt, num_fix, fig_path, f'boxplot_feasible_{param_range}_{eval_bool}', y_label='F', y_norm=False, eval_bool=eval_bool)
     return dot_vals, vals_dict, index_fix
  # END fix_plot() #_no_reeval
 
 
 # import GP
 def run_fix(fpath):
-
     # Get the feasible region
     def define_variable(x_samples, y_vals, y_threshold, num_pars):
         """
@@ -422,6 +466,7 @@ def run_fix(fpath):
             x_samples = x_samples.T
         x_temp_select = x_samples[np.where(y_vals > y_threshold)[0], :]
         x_temp_range = x_temp_select.max(axis=0)
+        # x_temp_range = np.array([50, 4, 2.0, 4, 0.2, 1.5, 0.4, 5, 0.4, 4, 0.25, 2.5, 0.6])
         univariable_feasible = [stats.uniform(0, x_temp_range[ii]) for ii in range(0, x_temp_range.shape[0])]
         variable_feasible = pyapprox.IndependentMultivariateRandomVariable(univariable_feasible)
         return variable_feasible
@@ -430,6 +475,7 @@ def run_fix(fpath):
     gp = pickle.load(open(f'{fpath}gp_0.pkl', "rb"))
     x_training = gp.X_train_
     y_training = gp.y_train_
+    gp._K_inv = None
 
     # visualization of the effects of factor fixing
     # define the variables for PCE
@@ -438,9 +484,6 @@ def run_fix(fpath):
     var_trans = AffineRandomVariableTransformation(variables_full, enforce_bounds=True)
     param_names = pd.read_csv(param_file, usecols=[2]).values.flatten()
     
-    # Resample in the ranges where the objective values are above -10
-    variable_temp = define_variable(x_training, y_training, -5, num_pars=13)
-
     # Identify the parameter ranges with output value satisfying a given criteria
     dot_fn = f'{file_settings()[0]}gp_run_1117/dotty_parameter_range.txt'
     if not os.path.exists(dot_fn):
@@ -451,7 +494,7 @@ def run_fix(fpath):
         dot_samples = np.loadtxt(dot_fn)
 
     dot_vals = gp.predict(dot_samples.T)
-    variable_feasible= define_variable(dot_samples, dot_vals, 0.382, num_pars=13)
+    variable_feasible= define_variable(dot_samples, dot_vals, 0.38, num_pars=13)
 
     # Calculate the ratio of calibrating samples in the sub-region
     if not os.path.exists(f'{fpath}ratio_cali_subreg.csv'):
@@ -459,24 +502,6 @@ def run_fix(fpath):
         df.to_csv(f'{fpath}ratio_cali_subreg.csv')
 
     # Calculate results with and create plots VS fixing parameters
-    # fsave = fpath + 'analytic-sa/' # if sampling, use variable_feasible; else, use variable_temp
-    # norm_y = False
-    # param_range = 'full'
-    # vals_fix_dict = {}
-    # dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
-    #         variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=False, norm_y = norm_y)
-    # _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-    #         variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=False, norm_y = norm_y)
-    # _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-    #         variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=False, norm_y = norm_y)
-    
-    # dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
-    #         variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=True, norm_y = norm_y)
-    # _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-    #         variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=True, norm_y = norm_y)
-    # _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
-    #         variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=True, norm_y = norm_y)
-    
     fsave = fpath + 'sampling-sa/'
     norm_y = False
     param_range = 'sub'
@@ -494,6 +519,25 @@ def run_fix(fpath):
             variables_full, variable_feasible, plot_range='sub_rand', param_range=param_range, re_eval=True, norm_y = norm_y)
     _, vals_fix_dict['sub_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'sampling', 
             variables_full, variable_feasible, plot_range='sub_max', param_range=param_range, re_eval=True, norm_y = norm_y)
+
+    fsave = fpath + 'analytic-sa/'
+    norm_y = False
+    param_range = 'full'
+    vals_fix_dict = {}
+    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
+            variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=False, norm_y = norm_y)
+    _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+            variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=False, norm_y = norm_y)
+    _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+            variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=False, norm_y = norm_y)
+    
+    dot_vals, vals_fix_dict['sub_mean'], index_fix = fix_plot(gp, fsave, param_names,ind_vars, 'analytic', 
+            variables_full, variable_feasible, plot_range='sub_mean', param_range=param_range, re_eval=True, norm_y = norm_y)
+    _, vals_fix_dict['full_rand'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+            variables_full, variable_feasible, plot_range='full_rand', param_range=param_range, re_eval=True, norm_y = norm_y)
+    _, vals_fix_dict['full_max'], _  = fix_plot(gp, fsave, param_names, ind_vars, 'analytic', 
+            variables_full, variable_feasible, plot_range='full_max', param_range=param_range, re_eval=True, norm_y = norm_y)
+    
     # END run_fix()
 
 
@@ -528,8 +572,8 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False, co
         ax.plot(y_eval.flatten(), y_hat.flatten(), linestyle='', marker='o', ms=8)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        y_eval_opt = y_eval[y_eval>0.382]
-        y_hat_opt = y_hat[y_eval>0.382]
+        y_eval_opt = y_eval[y_eval>0.38]
+        y_hat_opt = y_hat[y_eval>0.38]
         ax.plot(y_eval_opt.flatten(), y_hat_opt.flatten(), linestyle='', 
             marker='o', color='darkorange', alpha=0.7, ms=8)
         ax.plot(np.linspace(y_eval.min(), 0.8, 100), np.linspace(y_eval.min(), 0.8, 100), 
@@ -557,10 +601,10 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False, co
         y_pred_full = gp.predict(candidates_samples.T)
         y_pred_const = gp.predict(candidates_samples_const.T)
 
-        samples_vali_subreg1 = candidates_samples_const[:, np.where(y_pred_const>0.382)[0][0:20]]
+        samples_vali_subreg1 = candidates_samples_const[:, np.where(y_pred_const>0.38)[0][0:20]]
         samples_vali_subreg2 = candidates_samples_const[:, np.where(y_pred_const>0)[0]]
         y_sub1 = gp.predict(samples_vali_subreg2.T)
-        samples_vali_subreg2 = samples_vali_subreg2[:, np.where(y_sub1<=0.382)[0][0:80]]
+        samples_vali_subreg2 = samples_vali_subreg2[:, np.where(y_sub1<=0.38)[0][0:80]]
         samples_vali_full1 = candidates_samples[:, np.where(y_pred_full>-200)[0][0:180]]
         samples_vali_full2 = candidates_samples[:, np.where((y_pred_full>-1000)&(y_pred_full<-200))[0][0:20]]
         vali_samples = np.zeros(shape=(14, 300))
