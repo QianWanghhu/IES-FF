@@ -129,6 +129,5 @@ dependencies:
     - typing-extensions==3.7.4.3
     - uncertainties==2.4.4
     - urllib3==1.26.3
-    - veneer-py==0.1
     - xlrd==1.2.0
 prefix: F:\Anaconda\envs\oed
