@@ -7,7 +7,7 @@ import seaborn as sns
 
 from scipy import stats
 # from scipy.optimize import root
-from pyapprox import generate_independent_random_samples
+from pyapprox.variables.sampling import generate_independent_random_samples
 import matplotlib as mpl
 from scipy import stats
 from scipy.stats import spearmanr
@@ -413,6 +413,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
             samples_opt_no_fix = samples_opt[:, index_opt]
             vals_opt_no_fix = vals_opt[index_opt]
 
+        breakpoint()
         # Dotty plot iteratively
         fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
             param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix        
