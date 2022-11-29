@@ -7,10 +7,10 @@ import seaborn as sns
 
 from scipy import stats
 # from scipy.optimize import root
-from pyapprox.variables.sampling import generate_independent_random_samples
+from pyapprox.probability_measure_sampling import generate_independent_random_samples
 import matplotlib as mpl
-from scipy import stats
 from scipy.stats import spearmanr
+import concave_hull
 
 mpl.rcParams['font.size'] = 16
 mpl.rcParams['lines.linewidth'] = 3
@@ -208,13 +208,13 @@ def box_plot(vals_dict, vals_opt, num_fix, fig_path, fig_name, y_label='1/(2-F)'
     # Calculate values of boxplots
     if eval_bool:
         stats_boxplot = pd.DataFrame(columns = ['upper_quartile', 'lower_quartile', 'iqr', 'upper_whisker', 'lower_whisker'], index=np.arange(14))
-        stats_box_dict = get_box_values(df_filter.values)
+        stats_box_dict = get_box_values(df_filter.values, percentile=True)
         for key, value in stats_box_dict.items():
             stats_boxplot[key] = value
         stats_boxplot.to_csv(f'{fig_path}/{fig_name}.csv')
 
     # Create boxplots
-    ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis = 1.5)
+    ax = sns.boxplot(data=df_filter, saturation=0.5, linewidth=1, whis = (0.35, 99.65))
     if y_norm == True:
         ax.axhline(1/(2 - 0.38),  color='orange', linestyle='--', alpha=1 , linewidth=1)
         ax.set_ylim(0, 1.0)
@@ -225,7 +225,7 @@ def box_plot(vals_dict, vals_opt, num_fix, fig_path, fig_name, y_label='1/(2-F)'
     ax.set_ylabel(y_label)
     plt.savefig(f'{fig_path}/{fig_name}.png', dpi=300)
 
-def get_box_values(data):
+def get_box_values(data, percentile=False):
     """
     This function calculates the values shown by boxplot including upper_quartile, 
         lower_quartile, iqr, upper_whisker, lower_whisker.
@@ -242,12 +242,18 @@ def get_box_values(data):
     upper_quartile, lower_quartile = np.zeros_like(iqr), np.zeros_like(iqr)
     upper_whisker, lower_whisker =  np.zeros_like(iqr), np.zeros_like(iqr)
 
+    # Calculate upper and lower quantile using percentile or iqr approach
     for ii in np.arange(iqr.shape[0]):
         upper_quartile[ii] = np.percentile(data[:, ii][~np.isnan(data[:, ii])], 75)
         lower_quartile[ii] = np.percentile(data[:, ii][~np.isnan(data[:, ii])], 25)
         iqr[ii] = upper_quartile[ii] - lower_quartile[ii]
-        upper_whisker[ii] = data[:, ii][data[:, ii] <= upper_quartile[ii] + 1.5*iqr[ii]].max()
-        lower_whisker[ii] = data[:, ii][data[:, ii] >= lower_quartile[ii] - 1.5*iqr[ii]].min()
+        if percentile:
+            upper_whisker[ii] = np.percentile(data[:, ii][~np.isnan(data[:, ii])], 99.65)
+            lower_whisker[ii] = np.percentile(data[:, ii][~np.isnan(data[:, ii])], 0.35)
+        else:
+            upper_whisker[ii] = data[:, ii][data[:, ii] <= upper_quartile[ii] + 1.5*iqr[ii]].max()
+            lower_whisker[ii] = data[:, ii][data[:, ii] >= lower_quartile[ii] - 1.5*iqr[ii]].min()
+
     return_dict = {'upper_quartile': upper_quartile, 'lower_quartile': lower_quartile, \
         'iqr':iqr, 'upper_whisker':upper_whisker, 'lower_whisker': lower_whisker}
     return return_dict
@@ -291,10 +297,14 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
             y_value_opt = vals_dict[key][vals_dict[key]>0.38]
             k = num_fix - num_param_start
             for ii in index_fix[num_fix-1:]:
+                hull_uncond = concave_hull.compute([x_opt[ii, :], y_opt.flatten()], 10)
+                hull_cond = concave_hull.compute([x_value_opt[ii, :], y_value_opt.flatten()], 10)
                 sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[k, num_fix-num_param_start], color='royalblue', s=20, alpha=0.8)
                 sns.scatterplot(x=x_value_opt[ii, :], y=y_value_opt.flatten(), ax=axes[k, num_fix-num_param_start], color='orange', s=20, alpha=0.5)
                 axes[k, num_fix-num_param_start].xaxis.set_tick_params(labelsize=40)
                 axes[k, num_fix-num_param_start].yaxis.set_tick_params(labelsize=40)
+                axes[k, num_fix-num_param_start].scatter(hull_uncond[:, 0], hull_uncond[:, 1], color='blue')
+                axes[k, num_fix-num_param_start].scatter(hull_cond[:, 0], hull_cond[:, 1], color='red')
                 k += 1
             axes[num_fix-num_param_start, 0].set_ylabel(y_lab, fontsize=40)
     fig.set_tight_layout(True)
@@ -413,7 +423,7 @@ def fix_plot(gp, fsave, param_names, ind_vars, sa_cal_type, variables_full,
             samples_opt_no_fix = samples_opt[:, index_opt]
             vals_opt_no_fix = vals_opt[index_opt]
 
-        breakpoint()
+        # breakpoint()
         # Dotty plot iteratively
         fig = dotty_plot(samples_opt_no_fix, vals_opt_no_fix.flatten(), samples_opt_fix, vals_opt_fix.flatten(), 
             param_names, 'F'); #, orig_x_opt=samples_fix, orig_y_opt=vals_fix        
@@ -693,9 +703,3 @@ def plot_validation(fpath, xlabel, ylabel, plot_range='full', save_fig=False, co
 #     ylabel='GP simulation', plot_range='sub', save_fig=True, comp=True)
 
 run_fix(fpath = '../output/gp_run_1117/')
-
-
-
-
-
-
