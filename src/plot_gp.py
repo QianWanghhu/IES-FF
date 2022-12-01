@@ -287,7 +287,7 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
     ========
     fig
     """
-    def profile_likeli_curve(x, y, nbins=10, npoints=5):
+    def profile_likeli_curve(x, y, nbins=10):
         """
         This function is used to produce the curve of profile likelihood.
         Parameters:
@@ -300,7 +300,7 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
         x_min =x.min()
         x_max = x.max() 
         dx = (x_max - x_min) / nbins
-        point_ave_bin = np.zeros(shape=(2, 2*nbins))
+        point_bin = np.zeros(shape=(2, 2*nbins))
         # Identify points locating in each bin.
         for ii in range(nbins):
             x_low = x_min + dx * ii
@@ -311,10 +311,15 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
                 xind = np.where((x_low < x) & (x <= x_up))
 
             # Calculate the average of representative points selected for each bin
-            point_ave_bin[0, 2*ii:2*(ii+1)] = [x_low, x_up]          
-            point_ave_bin[1, 2*ii:2*(ii+1)] = np.round(y[xind].max(), 3)
-        return point_ave_bin
 
+            point_bin[0, 2*ii:2*(ii+1)] = [x_low, x_up]    
+            try:
+                point_bin[1, 2*ii:2*(ii+1)] = np.round(y[xind].max(), 3)
+            except ValueError:
+                point_bin[1, 2*ii:2*(ii+1)] = np.nan
+                # point_ave_bin[0, 2*ii:2*(ii+1)] = np.nan
+        return point_bin
+    # End profile_likeli_curve()
 
     fig, axes = plt.subplots(9, 9, figsize = (6*9, 5*9), sharey=True)
     num_param_start = 5
@@ -331,15 +336,13 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
                 axes[k, num_fix-num_param_start].yaxis.set_tick_params(labelsize=40)
                 
                 # Create the curve of profile likelihood and plot
-                points_prof_uncond = profile_likeli_curve(x_opt[ii, :], y_opt.flatten(), nbins=10, npoints=5)
-                sns.lineplot(x=points_prof_uncond[0], y=points_prof_uncond[1], \
-                    ax=axes[k, num_fix-num_param_start], color='dodgerblue', lw=5, alpha=0.9)
-                # axes[k, num_fix-num_param_start].plot(points_prof_uncond[0], points_prof_uncond[1], color='blue')
+                points_prof_uncond = profile_likeli_curve(x_opt[ii, :], y_opt.flatten(), nbins=6)
+                axes[k, num_fix-num_param_start].step(x=points_prof_uncond[0], y=points_prof_uncond[1], \
+                        color='dodgerblue', lw=5, alpha=0.9)
                 if not (x_value_opt[ii, :].min() == x_value_opt[ii, :].max()):
-                    points_prof_cond = profile_likeli_curve(x_value_opt[ii, :], y_value_opt.flatten(), nbins=10, npoints=5)
-                    sns.lineplot(x=points_prof_cond[0], y=points_prof_cond[1], \
-                        ax=axes[k, num_fix-num_param_start], color='orangered', lw=5, alpha=0.9)
-                # axes[k, num_fix-num_param_start].plot(points_prof_cond[0], points_prof_cond[1], color='red')
+                    points_prof_cond = profile_likeli_curve(x_value_opt[ii, :], y_value_opt.flatten(), nbins=6)
+                    axes[k, num_fix-num_param_start].step(x=points_prof_cond[0], y=points_prof_cond[1], \
+                        color='orangered', lw=5, alpha=0.9)
                 k += 1
 
             axes[num_fix-num_param_start, 0].set_ylabel(y_lab, fontsize=40)
