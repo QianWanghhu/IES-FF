@@ -10,7 +10,6 @@ from scipy import stats
 from pyapprox.probability_measure_sampling import generate_independent_random_samples
 import matplotlib as mpl
 from scipy.stats import spearmanr
-import concave_hull
 
 mpl.rcParams['font.size'] = 16
 mpl.rcParams['lines.linewidth'] = 3
@@ -288,6 +287,35 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
     ========
     fig
     """
+    def profile_likeli_curve(x, y, nbins=10, npoints=5):
+        """
+        This function is used to produce the curve of profile likelihood.
+        Parameters:
+        ============
+
+        Return:
+        ============
+        """
+        # Define ranges of each bin
+        x_min =x.min()
+        x_max = x.max() 
+        dx = (x_max - x_min) / nbins
+        point_ave_bin = np.zeros(shape=(2, 2*nbins))
+        # Identify points locating in each bin.
+        for ii in range(nbins):
+            x_low = x_min + dx * ii
+            x_up = x_min + dx * (ii + 1)
+            if ii == 0:
+                xind = np.where((x_low <= x) & (x <= x_up))
+            else:
+                xind = np.where((x_low < x) & (x <= x_up))
+
+            # Calculate the average of representative points selected for each bin
+            point_ave_bin[0, 2*ii:2*(ii+1)] = [x_low, x_up]          
+            point_ave_bin[1, 2*ii:2*(ii+1)] = np.round(y[xind].max(), 3)
+        return point_ave_bin
+
+
     fig, axes = plt.subplots(9, 9, figsize = (6*9, 5*9), sharey=True)
     num_param_start = 5
     for key, x_value in samples_dict.items():
@@ -297,15 +325,23 @@ def corner_pot(samples_dict, vals_dict, x_opt, y_opt, index_fix, y_lab='F'):
             y_value_opt = vals_dict[key][vals_dict[key]>0.38]
             k = num_fix - num_param_start
             for ii in index_fix[num_fix-1:]:
-                hull_uncond = concave_hull.compute([x_opt[ii, :], y_opt.flatten()], 10)
-                hull_cond = concave_hull.compute([x_value_opt[ii, :], y_value_opt.flatten()], 10)
                 sns.scatterplot(x=x_opt[ii, :], y=y_opt.flatten(), ax=axes[k, num_fix-num_param_start], color='royalblue', s=20, alpha=0.8)
                 sns.scatterplot(x=x_value_opt[ii, :], y=y_value_opt.flatten(), ax=axes[k, num_fix-num_param_start], color='orange', s=20, alpha=0.5)
                 axes[k, num_fix-num_param_start].xaxis.set_tick_params(labelsize=40)
                 axes[k, num_fix-num_param_start].yaxis.set_tick_params(labelsize=40)
-                axes[k, num_fix-num_param_start].scatter(hull_uncond[:, 0], hull_uncond[:, 1], color='blue')
-                axes[k, num_fix-num_param_start].scatter(hull_cond[:, 0], hull_cond[:, 1], color='red')
+                
+                # Create the curve of profile likelihood and plot
+                points_prof_uncond = profile_likeli_curve(x_opt[ii, :], y_opt.flatten(), nbins=10, npoints=5)
+                sns.lineplot(x=points_prof_uncond[0], y=points_prof_uncond[1], \
+                    ax=axes[k, num_fix-num_param_start], color='dodgerblue', lw=5, alpha=0.9)
+                # axes[k, num_fix-num_param_start].plot(points_prof_uncond[0], points_prof_uncond[1], color='blue')
+                if not (x_value_opt[ii, :].min() == x_value_opt[ii, :].max()):
+                    points_prof_cond = profile_likeli_curve(x_value_opt[ii, :], y_value_opt.flatten(), nbins=10, npoints=5)
+                    sns.lineplot(x=points_prof_cond[0], y=points_prof_cond[1], \
+                        ax=axes[k, num_fix-num_param_start], color='orangered', lw=5, alpha=0.9)
+                # axes[k, num_fix-num_param_start].plot(points_prof_cond[0], points_prof_cond[1], color='red')
                 k += 1
+
             axes[num_fix-num_param_start, 0].set_ylabel(y_lab, fontsize=40)
     fig.set_tight_layout(True)
 
